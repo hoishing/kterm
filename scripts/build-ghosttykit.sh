@@ -125,13 +125,20 @@ exec /usr/bin/libtool "$@"
 EOF
 chmod +x "$SHIM_DIR/libtool"
 
+# --- ensure the Metal Toolchain is installed ---
+# Ghostty compiles Metal shaders (.metal -> .metallib). On Xcode 26 the Metal
+# Toolchain is a separate, downloadable component; without it the build fails
+# with "cannot execute tool 'metal' due to missing Metal Toolchain".
+if ! /usr/bin/xcrun -f metal >/dev/null 2>&1; then
+  echo "==> Metal Toolchain missing; downloading (~700 MB, one time)..."
+  /usr/bin/xcodebuild -downloadComponent MetalToolchain
+fi
+
 # --- build the ghostty static lib (deps + C API combined by our libtool shim) ---
 echo "==> Building libghostty (this takes a few minutes)..."
 (
   cd ghostty
   # `native` builds only this host's macOS arch (we don't ship iOS / Intel).
-  # Building the Metal shaders requires the Metal Toolchain component:
-  #   xcodebuild -downloadComponent MetalToolchain
   # Zig's install/xcframework step also builds the full Ghostty.app, which can
   # fail to link in this toolchain — we don't need it. Our libtool shim has
   # already stashed the combined lib by then, so we ignore the exit code.
