@@ -1,0 +1,28 @@
+# Reference clones (not tracked)
+/cmux/
+/ghostling/
+
+# Build artifacts
+/GhosttyKit.xcframework
+/ghostty/macos/GhosttyKit.xcframework
+/ghostty.h
+/.zig-toolchain/
+/.ghostty-build/
+DerivedData/
+build/
+.build/
+
+# XcodeGen output (only project.yml is tracked)
+/kterm.xcodeproj
+
+# Xcode / macOS junk
+.DS_Store
+*.swp
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+*.moved-aside
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3

@@ -1,0 +1,60 @@
+name: kterm
+options:
+  bundleIdPrefix: com.kterm
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+targets:
+  kterm:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kterm.app
+        PRODUCT_NAME: kterm
+        INFOPLIST_FILE: Resources/Info.plist
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_ENTITLEMENTS: Resources/kterm.entitlements
+        # Find GhosttyKit.xcframework at the repo root.
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(PROJECT_DIR)"
+        # libghostty is a static library: link it plus every system framework
+        # and library it depends on (it carries no autolink hints).
+        OTHER_LDFLAGS:
+          - "-lc++"
+          - "-framework"
+          - "Metal"
+          - "-framework"
+          - "MetalKit"
+          - "-framework"
+          - "QuartzCore"
+          - "-framework"
+          - "CoreText"
+          - "-framework"
+          - "CoreGraphics"
+          - "-framework"
+          - "CoreVideo"
+          - "-framework"
+          - "IOSurface"
+          - "-framework"
+          - "IOKit"
+          - "-framework"
+          - "Carbon"
+          - "-framework"
+          - "ApplicationServices"
+          - "-framework"
+          - "CoreServices"
+          - "-framework"
+          - "AudioToolbox"
+          - "-framework"
+          - "UniformTypeIdentifiers"
+    dependencies:
+      # Static xcframework: link, do not embed.
+      - framework: GhosttyKit.xcframework
+        embed: false

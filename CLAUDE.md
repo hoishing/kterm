@@ -1,0 +1,3 @@
+- refer cmux/ for the vertical + horizontal tab layout
+- refer ghostling/ for how to use `libghostty`
+- use swift, swiftUI for app shell, and `libghostty` for the core functionality

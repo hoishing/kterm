@@ -1,0 +1,16 @@
+# kterm configuration — copy to ~/.config/kterm/config
+#
+# Syntax is `key = value`. Lines starting with `kterm-` configure the app shell;
+# every other key is passed straight to libghostty, so any standard Ghostty
+# setting works here (font-family, font-size, theme, background, cursor-style,
+# command, ...). See https://ghostty.org/docs/config for the full list.
+
+# --- app shell (kterm-only) ---
+kterm-sidebar-width = 160
+
+# --- terminal (libghostty) ---
+font-family = JetBrains Mono
+font-size = 13
+theme = dark
+cursor-style = block
+# command = /bin/zsh
