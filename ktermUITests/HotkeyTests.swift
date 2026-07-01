@@ -63,18 +63,18 @@ final class HotkeyTests: KtermUITestCase {
         XCTAssertEqual(selectedIndex(of: tabChips), 0)
     }
 
-    func testControlShiftBracketsCycleVerticalTabs() {
+    func testCommandControlBracketsCycleVerticalTabs() {
         app.typeKey("n", modifierFlags: .command) // group 2
         app.typeKey("n", modifierFlags: .command) // group 3
         XCTAssertEqual(selectedIndex(of: sidebarRows), 2)
 
-        app.typeKey("[", modifierFlags: [.control, .shift])
+        app.typeKey("[", modifierFlags: [.command, .control])
         XCTAssertEqual(selectedIndex(of: sidebarRows), 1)
 
-        app.typeKey("]", modifierFlags: [.control, .shift])
+        app.typeKey("]", modifierFlags: [.command, .control])
         XCTAssertEqual(selectedIndex(of: sidebarRows), 2)
 
-        app.typeKey("]", modifierFlags: [.control, .shift]) // wraps around
+        app.typeKey("]", modifierFlags: [.command, .control]) // wraps around
         XCTAssertEqual(selectedIndex(of: sidebarRows), 0)
     }
 

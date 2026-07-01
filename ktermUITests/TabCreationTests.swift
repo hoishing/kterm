@@ -27,7 +27,7 @@ final class TabCreationTests: KtermUITestCase {
         XCTAssertEqual(sidebarRows.count, 2)
         XCTAssertEqual(tabChips.count, 1, "a fresh vertical tab starts with a single terminal")
 
-        app.typeKey("[", modifierFlags: [.control, .shift]) // back to group 1
+        app.typeKey("[", modifierFlags: [.command, .control]) // back to group 1
         XCTAssertEqual(tabChips.count, 2, "group 1 should still have both its terminals")
     }
 
