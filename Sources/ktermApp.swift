@@ -57,6 +57,14 @@ struct KtermApp: App {
 
                 Divider()
 
+                // ⌘B — toggle the vertical tab sidebar.
+                Button(model.sidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                    model.sidebarVisible.toggle()
+                }
+                .keyboardShortcut("b", modifiers: .command)
+
+                Divider()
+
                 // ⌘1…⌘9 — jump to a vertical tab (group) by position.
                 ForEach(1...9, id: \.self) { n in
                     Button("Select Vertical Tab \(n)") { model.selectGroup(at: n - 1) }

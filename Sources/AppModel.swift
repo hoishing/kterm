@@ -42,6 +42,9 @@ final class AppModel {
     var groups: [TabGroup] = []
     var selectedGroupID: UUID?
 
+    /// Whether the vertical tab sidebar is shown (⌘B toggles it).
+    var sidebarVisible = true
+
     let ghostty: GhosttyApp
 
     var selectedGroup: TabGroup? {

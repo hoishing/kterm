@@ -8,31 +8,66 @@ struct TabStrip: View {
     @Bindable var model: AppModel
     @Bindable var group: TabGroup
 
+    /// Below this per-tab width the strip scrolls instead of shrinking further.
+    private let minTabWidth: CGFloat = 120
+    /// Fixed leading/trailing padding, inter-item spacing, and "+" button width.
+    /// Kept in sync with the layout below so the tabs fill the strip exactly
+    /// (content width == viewport width) before overflow scrolling kicks in.
+    private let leadingPad: CGFloat = 6
+    private let trailingPad: CGFloat = 8
+    private let spacing: CGFloat = 4
+    private let plusWidth: CGFloat = 28
+
+    /// Measured width of the whole strip (set via a background GeometryReader).
+    @State private var stripWidth: CGFloat = 0
+
+    private var tabWidth: CGFloat {
+        let count = group.tabs.count
+        guard count > 0 else { return minTabWidth }
+        let gaps = CGFloat(count - 1) * spacing
+        let reserved = leadingPad + trailingPad + spacing + plusWidth
+        let usable = max(stripWidth - reserved - gaps, 0)
+        return max(usable / CGFloat(count), minTabWidth)
+    }
+
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(group.tabs) { tab in
-                TabChip(
-                    title: tab.displayTitle,
-                    isSelected: tab.id == group.selectedTab?.id,
-                    select: { model.select(tab: tab, in: group) },
-                    close: { model.close(tab, in: group) }
-                )
+        HStack(spacing: spacing) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    ForEach(group.tabs) { tab in
+                        TabChip(
+                            title: tab.displayTitle,
+                            isSelected: tab.id == group.selectedTab?.id,
+                            select: { model.select(tab: tab, in: group) },
+                            close: { model.close(tab, in: group) }
+                        )
+                        .frame(width: tabWidth)
+                    }
+                }
+                .frame(maxHeight: .infinity)
             }
 
             Button(action: { model.newHorizontalTab() }) {
                 Image(systemName: "plus")
-                    .padding(.horizontal, 6)
+                    .frame(width: plusWidth)
             }
             .buttonStyle(.plain)
             .help("New horizontal tab (⌘T)")
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 8)
+        .padding(.leading, leadingPad)
+        .padding(.trailing, trailingPad)
         .frame(height: 38)
         .frame(maxWidth: .infinity)
         // Transparent so the native titlebar shows through and stays draggable
         // in the gaps between tabs.
-        .background(Color.clear)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.size.width, initial: true) { _, w in
+                        stripWidth = w
+                    }
+            }
+        )
     }
 }
 

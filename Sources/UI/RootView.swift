@@ -5,11 +5,30 @@ import SwiftUI
 /// titlebar above the terminal area only; the sidebar column extends up into the
 /// titlebar's left to host the macOS traffic-light buttons.
 struct RootView: View {
-    @Bindable var model: AppModel
-    let sidebarWidth: CGFloat
+    let model: AppModel
+
+    /// Sidebar width; seeded from config and adjustable by dragging its edge.
+    @State private var sidebarWidth: CGFloat
+    /// Sidebar width captured at the start of a resize drag.
+    @State private var dragStartWidth: CGFloat?
 
     /// Titlebar height; matches `TabStrip`'s bar height.
     private let titlebarHeight: CGFloat = 38
+    /// Leading space the traffic lights need when the sidebar is hidden.
+    private let trafficLightInset: CGFloat = 72
+    private let minSidebar: CGFloat = 120
+    private let maxSidebar: CGFloat = 480
+
+    init(model: AppModel, sidebarWidth: CGFloat) {
+        self.model = model
+        _sidebarWidth = State(initialValue: sidebarWidth)
+    }
+
+    /// Left column width in the titlebar row: the sidebar when shown, otherwise
+    /// just enough to clear the traffic lights.
+    private var titlebarLeadingWidth: CGFloat {
+        model.sidebarVisible ? sidebarWidth : trafficLightInset
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,9 +36,11 @@ struct RootView: View {
             HStack(spacing: 0) {
                 // Empty space above the sidebar that holds the traffic lights.
                 Color.clear
-                    .frame(width: sidebarWidth, height: titlebarHeight)
+                    .frame(width: titlebarLeadingWidth, height: titlebarHeight)
 
-                Divider()
+                if model.sidebarVisible {
+                    Divider()
+                }
 
                 if let group = model.selectedGroup {
                     TabStrip(model: model, group: group)
@@ -33,10 +54,13 @@ struct RootView: View {
 
             // Content row.
             HStack(spacing: 0) {
-                Sidebar(model: model)
-                    .frame(width: sidebarWidth)
+                if model.sidebarVisible {
+                    Sidebar(model: model)
+                        .frame(width: sidebarWidth)
+                        .overlay(alignment: .trailing) { resizeHandle }
 
-                Divider()
+                    Divider()
+                }
 
                 if let term = model.selectedGroup?.selectedTab {
                     SurfaceContainer(terminal: term)
@@ -49,6 +73,28 @@ struct RootView: View {
         .frame(minWidth: 640, minHeight: 400)
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
+    }
+
+    /// A thin, full-height strip over the sidebar's trailing edge that resizes
+    /// the sidebar on drag and shows the horizontal-resize cursor on hover.
+    private var resizeHandle: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .offset(x: 4) // straddle the divider line
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let start = dragStartWidth ?? sidebarWidth
+                        if dragStartWidth == nil { dragStartWidth = start }
+                        sidebarWidth = min(max(start + value.translation.width, minSidebar), maxSidebar)
+                    }
+                    .onEnded { _ in dragStartWidth = nil }
+            )
     }
 
     private var emptyState: some View {
