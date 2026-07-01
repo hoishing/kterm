@@ -25,11 +25,14 @@ class KtermUITestCase: XCTestCase {
     var sidebarRows: XCUIElementQuery { app.buttons.matching(identifier: "sidebar.row") }
     var tabChips: XCUIElementQuery { app.buttons.matching(identifier: "tabstrip.tab") }
 
-    /// Waits for the terminal surface to appear, then gives the shell a
-    /// moment to attach and print its first prompt before we type into it.
-    func waitForShellReady(timeout: TimeInterval = 5) {
+    /// Waits for the terminal surface to appear, then for its first OSC 7 pwd
+    /// report (`~`) to land, so callers never type into a shell that hasn't
+    /// actually attached yet. A fixed sleep here isn't reliable: a cold CI
+    /// runner can take longer than a local machine to fork/attach the shell,
+    /// and keystrokes sent before that happens get lost.
+    func waitForShellReady(timeout: TimeInterval = 10) {
         XCTAssertTrue(surface.waitForExistence(timeout: timeout), "terminal surface never appeared")
-        Thread.sleep(forTimeInterval: 1.5)
+        waitForLabel(sidebarRows.element(boundBy: 0), toEqual: "~", timeout: timeout)
     }
 
     /// Clicks the focused terminal to make sure it's first responder, then

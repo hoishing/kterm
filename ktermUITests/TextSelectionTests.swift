@@ -17,10 +17,11 @@ final class TextSelectionTests: KtermUITestCase {
 
         NSPasteboard.general.clearContents()
 
-        // Drag across the full width of the top row (the prompt line, right
-        // after `clear`) so the marker is captured regardless of prompt width.
+        // Drag across the top of the surface, a few rows deep, so the marker
+        // is captured even if a long prompt (e.g. CI's long runner hostname)
+        // wraps the line onto a second row.
         let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.03))
-        let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.03))
+        let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.12))
         start.press(forDuration: 0.1, thenDragTo: end)
 
         app.typeKey("c", modifierFlags: .command)
