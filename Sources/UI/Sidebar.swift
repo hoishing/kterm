@@ -83,8 +83,8 @@ private struct SidebarRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TabHighlight.shape.fill(TabHighlight.fill(isSelected: isSelected, hovering: false)))
-            .contentShape(TabHighlight.shape)
+            .background(RoundedRectangle(cornerRadius: 6).fill(TabHighlight.fill(isSelected: isSelected, hovering: false)))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {

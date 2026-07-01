@@ -22,7 +22,7 @@ final class CmdHoldMonitor {
     private var resignObserver: Any?
     private var pendingShowGeneration = 0
 
-    init(holdDelay: TimeInterval = 1.0) {
+    init(holdDelay: TimeInterval = 0.5) {
         self.holdDelay = holdDelay
     }
 

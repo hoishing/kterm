@@ -115,8 +115,8 @@ private struct TabChip: View {
     }
 }
 
-/// Shared active/hover styling for both horizontal (`TabChip`) and vertical
-/// (`SidebarRow`) tabs: a fully-rounded capsule, light grey when active.
+/// Shared active/hover fill color for both horizontal (`TabChip`, fully-rounded
+/// capsule) and vertical (`SidebarRow`, 6pt rounded rect) tabs: light grey when active.
 enum TabHighlight {
     static let shape = Capsule()
 
