@@ -13,7 +13,13 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 | ⌘T | New **horizontal** tab (a new terminal in the current group) |
 | ⌘W | Close the active tab |
 | ⌘B | Toggle the sidebar |
+| ⌘1…⌘9 | Jump to vertical tab (group) by position |
+| ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab (terminal) |
+| ⌘⌃[ / ⌘⌃] | Previous / next vertical tab (group) |
 | ⌘Q | Quit (no confirmation) |
+
+Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit
+shortcut as a hint.
 
 ## Configuration
 
