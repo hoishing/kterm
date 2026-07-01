@@ -15,6 +15,8 @@ final class SurfaceView: NSView, NSTextInputClient {
 
     /// Called when libghostty reports a new title for this surface.
     var onTitleChange: ((String) -> Void)?
+    /// Called when libghostty reports a new working directory for this surface.
+    var onPwdChange: ((String) -> Void)?
     /// Called when the underlying shell process exits / surface requests close.
     var onClose: (() -> Void)?
 

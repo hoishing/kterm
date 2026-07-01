@@ -8,12 +8,11 @@ struct Sidebar: View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(model.groups.enumerated()), id: \.element.id) { index, group in
+                    ForEach(model.groups) { group in
                         SidebarRow(
                             title: group.displayTitle,
                             isSelected: group.id == model.selectedGroup?.id,
                             tabCount: group.tabs.count,
-                            shortcutNumber: index + 1,
                             select: { model.select(group: group) }
                         )
                     }
@@ -40,8 +39,6 @@ private struct SidebarRow: View {
     let title: String
     let isSelected: Bool
     let tabCount: Int
-    /// 1-based position; shown as a ⌘N hint for the first nine groups.
-    let shortcutNumber: Int
     let select: () -> Void
 
     var body: some View {
@@ -55,11 +52,6 @@ private struct SidebarRow: View {
                 Spacer(minLength: 0)
                 if tabCount > 1 {
                     Text("\(tabCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                if shortcutNumber <= 9 {
-                    Text("⌘\(shortcutNumber)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

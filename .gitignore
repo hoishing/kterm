@@ -15,6 +15,9 @@ build/
 # XcodeGen output (only project.yml is tracked)
 /kterm.xcodeproj
 
+# Claude Code local state
+/.claude/
+
 # Xcode / macOS junk
 .DS_Store
 *.swp

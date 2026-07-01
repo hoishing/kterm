@@ -17,6 +17,14 @@ final class GhosttyApp {
     private(set) var config: ghostty_config_t?
 
     init(config: KtermConfig) {
+        // Point libghostty at our bundled resources (Contents/Resources/ghostty)
+        // so it can inject shell integration into the shell. This is what makes
+        // the shell emit OSC 7 (working directory) and title reports. Must be set
+        // before ghostty_init.
+        if let resources = Bundle.main.resourceURL?.appendingPathComponent("ghostty").path {
+            setenv("GHOSTTY_RESOURCES_DIR", resources, 1)
+        }
+
         // ghostty_init must be called exactly once per process before anything
         // else. It consumes the process argv.
         let argv = CommandLine.unsafeArgv
@@ -60,6 +68,22 @@ final class GhosttyApp {
     deinit {
         if let app { ghostty_app_free(app) }
         if let config { ghostty_config_free(config) }
+    }
+
+    /// The terminal background color from the loaded config, used to tint the
+    /// titlebar area above the terminal so it reads as one continuous surface.
+    /// Falls back to the system text-background color if unset.
+    var backgroundColor: NSColor {
+        guard let config else { return .textBackgroundColor }
+        var color = ghostty_config_color_s()
+        let key = "background"
+        guard ghostty_config_get(config, &color, key, UInt(key.utf8.count)) else {
+            return .textBackgroundColor
+        }
+        return NSColor(srgbRed: Double(color.r) / 255,
+                       green: Double(color.g) / 255,
+                       blue: Double(color.b) / 255,
+                       alpha: 1)
     }
 
     /// Pump libghostty. Safe to call any time on the main thread.
@@ -107,6 +131,16 @@ final class GhosttyApp {
             let title = String(cString: titlePtr)
             let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
             DispatchQueue.main.async { view.onTitleChange?(title) }
+            return true
+
+        case GHOSTTY_ACTION_PWD:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface),
+                  let pwdPtr = action.action.pwd.pwd else { return false }
+            let pwd = String(cString: pwdPtr)
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async { view.onPwdChange?(pwd) }
             return true
 
         default:

@@ -7,6 +7,8 @@ import Observation
 final class Terminal: Identifiable {
     let id = UUID()
     var title: String = ""
+    /// Current working directory reported by the shell, if any.
+    var pwd: String = ""
     let surfaceView: SurfaceView
 
     init(app: GhosttyApp) {
@@ -14,8 +16,22 @@ final class Terminal: Identifiable {
         self.surfaceView = SurfaceView(app: app.app!)
     }
 
-    /// A short label for the tab strip.
-    var displayTitle: String { title.isEmpty ? "Terminal" : title }
+    /// A short label for the tab strip: the working directory's folder name
+    /// (`~` for home), falling back to the title, then "Terminal".
+    var displayTitle: String {
+        if let name = Self.folderName(for: pwd) { return name }
+        return title.isEmpty ? "Terminal" : title
+    }
+
+    /// The trailing folder name of a directory path, abbreviating the home
+    /// directory to `~`. Returns nil for an empty path.
+    private static func folderName(for path: String) -> String? {
+        guard !path.isEmpty else { return nil }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path == home { return "~" }
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? "/" : name
+    }
 }
 
 /// A vertical (sidebar) tab: a named group of horizontal terminal tabs.
@@ -150,6 +166,9 @@ final class AppModel {
         let term = Terminal(app: ghostty)
         term.surfaceView.onTitleChange = { [weak term] title in
             term?.title = title
+        }
+        term.surfaceView.onPwdChange = { [weak term] pwd in
+            term?.pwd = pwd
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
