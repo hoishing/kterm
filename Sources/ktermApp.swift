@@ -1,13 +1,28 @@
 import SwiftUI
+import UserNotifications
 
 /// Hardcodes Ghostty's `quit-after-last-window-closed = true`: terminate the
 /// process once the (single) window closes instead of lingering in the dock.
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Force dark mode regardless of the system appearance.
         NSApp.appearance = NSAppearance(named: .darkAqua)
+
+        UNUserNotificationCenter.current().delegate = self
+        NotificationManager.requestAuthorizationIfNeeded()
+    }
+
+    // Bell / OSC 9 / OSC 777 notifications are only posted when kterm isn't
+    // already showing that tab (see AppModel's `onNotification` wiring), so
+    // always present them once posted.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 }
 
@@ -79,11 +94,11 @@ struct KtermApp: App {
                 Button("Next Horizontal Tab") { model.selectNextHorizontalTab() }
                     .keyboardShortcut("]", modifiers: [.command, .shift])
 
-                // ⌃⇧[ / ⌃⇧] — previous/next vertical tab (group).
+                // ⌘⌃[ / ⌘⌃] — previous/next vertical tab (group).
                 Button("Previous Vertical Tab") { model.selectPrevVerticalTab() }
-                    .keyboardShortcut("[", modifiers: [.control, .shift])
+                    .keyboardShortcut("[", modifiers: [.command, .control])
                 Button("Next Vertical Tab") { model.selectNextVerticalTab() }
-                    .keyboardShortcut("]", modifiers: [.control, .shift])
+                    .keyboardShortcut("]", modifiers: [.command, .control])
             }
         }
     }

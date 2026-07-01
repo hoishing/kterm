@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Observation
 
@@ -9,6 +10,10 @@ final class Terminal: Identifiable {
     var title: String = ""
     /// Current working directory reported by the shell, if any.
     var pwd: String = ""
+    /// Git branch of `pwd`, if it's inside a repo (refreshed on `pwd` change
+    /// and whenever this tab regains focus, so `git checkout` in-shell shows
+    /// up too). `nil` outside a repo or in detached HEAD.
+    var branch: String?
     let surfaceView: SurfaceView
 
     init(app: GhosttyApp) {
@@ -50,6 +55,10 @@ final class TabGroup: Identifiable {
 
     /// Group title mirrors the active terminal.
     var displayTitle: String { selectedTab?.displayTitle ?? "Terminal" }
+
+    /// Git branch shown under the folder title in the sidebar, mirroring the
+    /// active terminal's `pwd`.
+    var branch: String? { selectedTab?.branch }
 }
 
 /// The whole window state: a list of vertical tabs (groups), each containing
@@ -73,6 +82,18 @@ final class AppModel {
         self.ghostty = ghostty
         // Start with one vertical tab containing one terminal.
         newVerticalTab()
+
+        // Re-check the selected tab's branch when kterm regains focus, so an
+        // in-shell `git checkout` made while another app was frontmost shows
+        // up as soon as the user comes back.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor [weak self] in
+                guard let self, let term = self.selectedGroup?.selectedTab else { return }
+                self.refreshBranch(for: term)
+            }
+        }
     }
 
     /// ⌘N — new vertical tab (a fresh group with one terminal), selected.
@@ -105,6 +126,7 @@ final class AppModel {
     func select(group: TabGroup) {
         selectedGroupID = group.id
         focusSelected()
+        if let term = group.selectedTab { refreshBranch(for: term) }
     }
 
     /// ⌘1…⌘9 — select the vertical tab (group) at `index`, if it exists.
@@ -125,7 +147,7 @@ final class AppModel {
         select(tab: group.tabs[next], in: group)
     }
 
-    /// ⌃⇧] / ⌃⇧[ — cycle vertical tabs (groups) (wrapping).
+    /// ⌘⌃] / ⌘⌃[ — cycle vertical tabs (groups) (wrapping).
     func selectNextVerticalTab() { cycleVertical(+1) }
     func selectPrevVerticalTab() { cycleVertical(-1) }
 
@@ -141,6 +163,7 @@ final class AppModel {
         selectedGroupID = group.id
         group.selectedTabID = tab.id
         focusSelected()
+        refreshBranch(for: tab)
     }
 
     func close(_ term: Terminal, in group: TabGroup) {
@@ -169,8 +192,18 @@ final class AppModel {
         term.surfaceView.onTitleChange = { [weak term] title in
             term?.title = title
         }
-        term.surfaceView.onPwdChange = { [weak term] pwd in
+        term.surfaceView.onPwdChange = { [weak self, weak term] pwd in
             term?.pwd = pwd
+            if let term { self?.refreshBranch(for: term) }
+        }
+        term.surfaceView.onNotification = { [weak self, weak term] title, body in
+            guard let self, let term else { return }
+            // Suppress only when kterm is frontmost AND this exact tab is
+            // the one currently visible — otherwise the user isn't looking
+            // at it and should be told.
+            let isFocused = NSApp.isActive && self.selectedGroup?.selectedTab?.id == term.id
+            guard !isFocused else { return }
+            NotificationManager.post(title: title, body: body)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
@@ -181,6 +214,18 @@ final class AppModel {
             }
         }
         return term
+    }
+
+    /// Re-resolves `term`'s git branch from its current `pwd`, off the main
+    /// thread. Guards against races (pwd changing again mid-lookup, or the
+    /// terminal closing) by re-checking `pwd` before writing back.
+    private func refreshBranch(for term: Terminal) {
+        let pwd = term.pwd
+        Task { @MainActor [weak term] in
+            let branch = await GitBranch.current(for: pwd)
+            guard let term, term.pwd == pwd else { return }
+            term.branch = branch
+        }
     }
 
     /// Make the selected terminal's view first responder so typing goes to it.

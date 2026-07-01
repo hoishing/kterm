@@ -143,6 +143,17 @@ final class GhosttyApp {
             DispatchQueue.main.async { view.onPwdChange?(pwd) }
             return true
 
+        case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let n = action.action.desktop_notification
+            let title = n.title.map { String(cString: $0) } ?? "kterm"
+            let body = n.body.map { String(cString: $0) } ?? ""
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async { view.onNotification?(title, body) }
+            return true
+
         default:
             return false
         }
