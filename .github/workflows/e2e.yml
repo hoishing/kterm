@@ -37,6 +37,14 @@ jobs:
           path: .zig-toolchain
           key: zig-toolchain-${{ runner.arch }}-${{ hashFiles('scripts/build-ghosttykit.sh') }}
 
+      - name: Use zsh as the runner's login shell
+        # libghostty refuses to inject OSC 7 shell integration into Apple's
+        # own /bin/bash (it disables the ENV-based POSIX startup path Ghostty
+        # relies on), so it silently no-ops for it. GitHub's macOS runner
+        # account defaults to /bin/bash; real kterm users are on zsh (macOS's
+        # default shell since Catalina), which libghostty integrates fine.
+        run: sudo chsh -s /bin/zsh "$(whoami)"
+
       - name: Install xcodegen
         run: brew install xcodegen
 
