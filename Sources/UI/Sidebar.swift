@@ -12,7 +12,6 @@ struct Sidebar: View {
                         SidebarRow(
                             title: group.displayTitle,
                             isSelected: group.id == model.selectedGroup?.id,
-                            tabCount: group.tabs.count,
                             select: { model.select(group: group) }
                         )
                     }
@@ -30,38 +29,35 @@ struct Sidebar: View {
             }
             .buttonStyle(.plain)
             .help("New vertical tab (⌘N)")
+            .accessibilityIdentifier("sidebar.newTab")
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        // `.contain` makes the VStack itself an addressable accessibility
+        // element (for reading its frame, e.g. in resize tests) while still
+        // exposing its row/button children individually.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sidebar")
     }
 }
 
 private struct SidebarRow: View {
     let title: String
     let isSelected: Bool
-    let tabCount: Int
     let select: () -> Void
 
     var body: some View {
         Button(action: select) {
-            HStack(spacing: 6) {
-                Image(systemName: "terminal")
-                    .font(.system(size: 11))
-                Text(title)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-                if tabCount > 1 {
-                    Text("\(tabCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TabHighlight.shape.fill(TabHighlight.fill(isSelected: isSelected, hovering: false)))
-            .contentShape(TabHighlight.shape)
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.head)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(TabHighlight.shape.fill(TabHighlight.fill(isSelected: isSelected, hovering: false)))
+                .contentShape(TabHighlight.shape)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("sidebar.row")
+        .accessibilityValue(isSelected ? "selected" : "unselected")
     }
 }

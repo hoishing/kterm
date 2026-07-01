@@ -69,3 +69,32 @@ targets:
       # Static xcframework: link, do not embed.
       - framework: GhosttyKit.xcframework
         embed: false
+
+  ktermUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: ktermUITests
+    settings:
+      base:
+        PRODUCT_NAME: ktermUITests
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: kterm
+    dependencies:
+      - target: kterm
+
+schemes:
+  kterm:
+    build:
+      targets:
+        kterm: all
+        ktermUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ktermUITests

@@ -124,6 +124,9 @@ struct SidebarResizeHandle: NSViewRepresentable {
         let view = HandleView()
         view.onChanged = onChanged
         view.onEnded = onEnded
+        view.setAccessibilityElement(true)
+        view.setAccessibilityRole(.button)
+        view.setAccessibilityIdentifier("sidebar.resizeHandle")
         return view
     }
 
@@ -221,6 +224,8 @@ struct SurfaceContainer: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
+        container.setAccessibilityElement(true)
+        container.setAccessibilityIdentifier("terminal.surface")
         attach(terminal.surfaceView, to: container)
         return container
     }

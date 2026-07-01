@@ -53,6 +53,7 @@ struct TabStrip: View {
             }
             .buttonStyle(.plain)
             .help("New horizontal tab (⌘T)")
+            .accessibilityIdentifier("tabstrip.newTab")
         }
         .padding(.leading, leadingPad)
         .padding(.trailing, trailingPad)
@@ -89,9 +90,11 @@ private struct TabChip: View {
             .buttonStyle(.plain)
             .opacity(hovering || isSelected ? 1 : 0)
             .help("Close tab (⌘W)")
+            .accessibilityIdentifier("tabstrip.tab.close")
 
             Text(title)
                 .lineLimit(1)
+                .truncationMode(.head)
                 .font(.system(size: 12))
                 .frame(maxWidth: .infinity)
         }
@@ -104,6 +107,11 @@ private struct TabChip: View {
         .contentShape(Capsule())
         .onTapGesture(perform: select)
         .onHover { hovering = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("tabstrip.tab")
+        .accessibilityLabel(title)
+        .accessibilityValue(isSelected ? "selected" : "unselected")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

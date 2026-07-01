@@ -16,21 +16,23 @@ final class Terminal: Identifiable {
         self.surfaceView = SurfaceView(app: app.app!)
     }
 
-    /// A short label for the tab strip: the working directory's folder name
-    /// (`~` for home), falling back to the title, then "Terminal".
+    /// A label for the tab strip: the working directory path relative to
+    /// home (`~/...`), or the full path if outside home, falling back to
+    /// the title, then "Terminal". Views truncate this from the front
+    /// (`.truncationMode(.head)`) so the trailing folder always stays visible.
     var displayTitle: String {
-        if let name = Self.folderName(for: pwd) { return name }
+        if let path = Self.displayPath(for: pwd) { return path }
         return title.isEmpty ? "Terminal" : title
     }
 
-    /// The trailing folder name of a directory path, abbreviating the home
-    /// directory to `~`. Returns nil for an empty path.
-    private static func folderName(for path: String) -> String? {
+    /// The directory path with the home directory abbreviated to `~`.
+    /// Returns nil for an empty path.
+    private static func displayPath(for path: String) -> String? {
         guard !path.isEmpty else { return nil }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         if path == home { return "~" }
-        let name = (path as NSString).lastPathComponent
-        return name.isEmpty ? "/" : name
+        if path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
+        return path
     }
 }
 
