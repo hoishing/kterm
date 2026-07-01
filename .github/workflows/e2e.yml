@@ -82,7 +82,9 @@ jobs:
           TEST_FILTER: ${{ inputs.test_filter }}
           TEST_TIMEOUT: ${{ inputs.test_timeout || '120' }}
         run: |
-          set -euo pipefail
+          # No -u: GitHub's macOS runner /bin/bash is 3.2, which treats
+          # expanding an empty array under `set -u` as an unbound variable.
+          set -eo pipefail
 
           ONLY_TESTING=()
           if [ -n "$TEST_FILTER" ]; then
