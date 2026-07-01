@@ -1,7 +1,19 @@
 import SwiftUI
 
+/// Hardcodes Ghostty's `quit-after-last-window-closed = true`: terminate the
+/// process once the (single) window closes instead of lingering in the dock.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Force dark mode regardless of the system appearance.
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+    }
+}
+
 @main
 struct KtermApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model: AppModel
     private let config: KtermConfig
 
@@ -26,6 +38,9 @@ struct KtermApp: App {
                 }
             }
         }
+        // Hardcodes Ghostty's `macos-titlebar-style = tabs`: hide the system
+        // titlebar so the tab strip (RootView) fills it edge to edge.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             // Replace the default New Window (⌘N) with kterm's tab commands.
             CommandGroup(replacing: .newItem) {
@@ -39,6 +54,28 @@ struct KtermApp: App {
             CommandGroup(after: .newItem) {
                 Button("Close Tab") { model.closeActiveTab() }
                     .keyboardShortcut("w", modifiers: .command)
+
+                Divider()
+
+                // ⌘1…⌘9 — jump to a vertical tab (group) by position.
+                ForEach(1...9, id: \.self) { n in
+                    Button("Select Vertical Tab \(n)") { model.selectGroup(at: n - 1) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
+                }
+
+                Divider()
+
+                // ⌘⇧[ / ⌘⇧] — previous/next horizontal tab (terminal).
+                Button("Previous Horizontal Tab") { model.selectPrevHorizontalTab() }
+                    .keyboardShortcut("[", modifiers: [.command, .shift])
+                Button("Next Horizontal Tab") { model.selectNextHorizontalTab() }
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+
+                // ⌃⇧[ / ⌃⇧] — previous/next vertical tab (group).
+                Button("Previous Vertical Tab") { model.selectPrevVerticalTab() }
+                    .keyboardShortcut("[", modifiers: [.control, .shift])
+                Button("Next Vertical Tab") { model.selectNextVerticalTab() }
+                    .keyboardShortcut("]", modifiers: [.control, .shift])
             }
         }
     }

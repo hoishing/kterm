@@ -86,6 +86,36 @@ final class AppModel {
         focusSelected()
     }
 
+    /// ⌘1…⌘9 — select the vertical tab (group) at `index`, if it exists.
+    func selectGroup(at index: Int) {
+        guard index >= 0, index < groups.count else { return }
+        select(group: groups[index])
+    }
+
+    /// ⌘⇧] / ⌘⇧[ — cycle horizontal tabs within the selected group (wrapping).
+    func selectNextHorizontalTab() { cycleHorizontal(+1) }
+    func selectPrevHorizontalTab() { cycleHorizontal(-1) }
+
+    private func cycleHorizontal(_ delta: Int) {
+        guard let group = selectedGroup, !group.tabs.isEmpty,
+              let cur = group.tabs.firstIndex(where: { $0.id == group.selectedTab?.id })
+        else { return }
+        let next = (cur + delta + group.tabs.count) % group.tabs.count
+        select(tab: group.tabs[next], in: group)
+    }
+
+    /// ⌃⇧] / ⌃⇧[ — cycle vertical tabs (groups) (wrapping).
+    func selectNextVerticalTab() { cycleVertical(+1) }
+    func selectPrevVerticalTab() { cycleVertical(-1) }
+
+    private func cycleVertical(_ delta: Int) {
+        guard !groups.isEmpty,
+              let cur = groups.firstIndex(where: { $0.id == selectedGroup?.id })
+        else { return }
+        let next = (cur + delta + groups.count) % groups.count
+        select(group: groups[next])
+    }
+
     func select(tab: Terminal, in group: TabGroup) {
         selectedGroupID = group.id
         group.selectedTabID = tab.id
