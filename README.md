@@ -12,6 +12,7 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 | ⌘N | New **vertical** tab (a new group in the left sidebar) |
 | ⌘T | New **horizontal** tab (a new terminal in the current group) |
 | ⌘W | Close the active tab |
+| ⌘B | Toggle the sidebar |
 | ⌘Q | Quit (no confirmation) |
 
 ## Configuration
@@ -41,8 +42,10 @@ and emits `GhosttyKit.xcframework` from the `ghostty/` submodule.
 ```
 Window
 └─ HStack
-   ├─ Sidebar          vertical tabs (groups)        ⌘N adds
+   ├─ Sidebar          vertical tabs (groups)        ⌘N adds, ⌘B toggles, resizable
    └─ VStack
-      ├─ TabStrip      horizontal tabs (terminals)   ⌘T adds, ⌘W closes
+      ├─ TabStrip      horizontal tabs (terminals)   ⌘T adds, ⌘W closes, scrolls on overflow
       └─ SurfaceView   the active libghostty terminal
 ```
+
+Tab titles track each terminal's working directory (via `GHOSTTY_ACTION_PWD`).
