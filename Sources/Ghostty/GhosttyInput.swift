@@ -19,11 +19,32 @@ func ghosttyMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
     return ghostty_input_mods_e(mods)
 }
 
+/// Convert libghostty's mods bitmask back into AppKit modifier flags.
+/// Adapted from Ghostty's `Ghostty.eventModifierFlags`.
+func ghosttyEventModifierFlags(_ mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
+    var flags = NSEvent.ModifierFlags(rawValue: 0)
+    if mods.rawValue & GHOSTTY_MODS_SHIFT.rawValue != 0 { flags.insert(.shift) }
+    if mods.rawValue & GHOSTTY_MODS_CTRL.rawValue != 0 { flags.insert(.control) }
+    if mods.rawValue & GHOSTTY_MODS_ALT.rawValue != 0 { flags.insert(.option) }
+    if mods.rawValue & GHOSTTY_MODS_SUPER.rawValue != 0 { flags.insert(.command) }
+    return flags
+}
+
 /// Build a `ghostty_input_key_s` from an NSEvent (without text/composing, which
 /// the caller sets). The keycode passed to libghostty is the native macOS
 /// virtual keycode, which libghostty maps internally.
+///
+/// `translationMods`, when given, should come from
+/// `ghostty_surface_key_translation_mods` and reflects which modifiers configs
+/// like `macos-option-as-alt` say were consumed producing `text` -- e.g. with
+/// `macos-option-as-alt` set, Option is NOT consumed, so it stays available for
+/// libghostty to encode as an Alt/ESC prefix (needed for Option+Delete to be
+/// word-delete instead of a plain backspace).
 /// Adapted from Ghostty's `NSEvent.ghosttyKeyEvent`.
-func ghosttyKeyEvent(_ event: NSEvent, action: ghostty_input_action_e) -> ghostty_input_key_s {
+func ghosttyKeyEvent(
+    _ event: NSEvent, action: ghostty_input_action_e,
+    translationMods: NSEvent.ModifierFlags? = nil
+) -> ghostty_input_key_s {
     var key = ghostty_input_key_s()
     key.action = action
     key.keycode = UInt32(event.keyCode)
@@ -31,7 +52,7 @@ func ghosttyKeyEvent(_ event: NSEvent, action: ghostty_input_action_e) -> ghostt
     key.composing = false
     key.mods = ghosttyMods(event.modifierFlags)
     // control/command never contribute to text translation; assume the rest do.
-    key.consumed_mods = ghosttyMods(event.modifierFlags.subtracting([.control, .command]))
+    key.consumed_mods = ghosttyMods((translationMods ?? event.modifierFlags).subtracting([.control, .command]))
     key.unshifted_codepoint = 0
     if event.type == .keyDown || event.type == .keyUp {
         if let chars = event.characters(byApplyingModifiers: []),

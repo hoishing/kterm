@@ -106,23 +106,55 @@ final class SurfaceView: NSView, NSTextInputClient {
 
         let action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
 
+        // Ask libghostty which mods configs like `macos-option-as-alt` say are
+        // NOT consumed by text translation (e.g. Option, when configured), so
+        // AppKit's text system sees the right modifiers and libghostty knows to
+        // still add an Alt/ESC prefix for keys like Option+Delete.
+        let translationModsGhostty = ghosttyEventModifierFlags(
+            ghostty_surface_key_translation_mods(surface, ghosttyMods(event.modifierFlags)))
+        var translationMods = event.modifierFlags
+        for flag: NSEvent.ModifierFlags in [.shift, .control, .option, .command] {
+            if translationModsGhostty.contains(flag) {
+                translationMods.insert(flag)
+            } else {
+                translationMods.remove(flag)
+            }
+        }
+        let translationEvent: NSEvent
+        if translationMods == event.modifierFlags {
+            translationEvent = event
+        } else {
+            translationEvent = NSEvent.keyEvent(
+                with: event.type,
+                location: event.locationInWindow,
+                modifierFlags: translationMods,
+                timestamp: event.timestamp,
+                windowNumber: event.windowNumber,
+                context: nil,
+                characters: event.characters(byApplyingModifiers: translationMods) ?? "",
+                charactersIgnoringModifiers: event.charactersIgnoringModifiers ?? "",
+                isARepeat: event.isARepeat,
+                keyCode: event.keyCode
+            ) ?? event
+        }
+
         // Accumulate any text produced by IME / interpretKeyEvents.
         keyTextAccumulator = []
         defer { keyTextAccumulator = nil }
         let markedBefore = markedText.length > 0
 
-        interpretKeyEvents([event])
+        interpretKeyEvents([translationEvent])
 
         // Push preedit state to libghostty.
         syncPreedit(clearIfNeeded: markedBefore)
 
         if let acc = keyTextAccumulator, !acc.isEmpty {
             for text in acc {
-                _ = sendKey(action, event: event, text: text, composing: false)
+                _ = sendKey(action, event: event, translationEvent: translationEvent, text: text, composing: false)
             }
         } else {
-            _ = sendKey(action, event: event,
-                        text: event.ghosttyCharacters,
+            _ = sendKey(action, event: event, translationEvent: translationEvent,
+                        text: translationEvent.ghosttyCharacters,
                         composing: markedText.length > 0 || markedBefore)
         }
     }
@@ -149,10 +181,10 @@ final class SurfaceView: NSView, NSTextInputClient {
     }
 
     @discardableResult
-    private func sendKey(_ action: ghostty_input_action_e, event: NSEvent,
+    private func sendKey(_ action: ghostty_input_action_e, event: NSEvent, translationEvent: NSEvent? = nil,
                          text: String?, composing: Bool) -> Bool {
         guard let surface else { return false }
-        var key = ghosttyKeyEvent(event, action: action)
+        var key = ghosttyKeyEvent(event, action: action, translationMods: translationEvent?.modifierFlags)
         key.composing = composing
 
         // Only forward UTF-8 text when it isn't a lone control character;
