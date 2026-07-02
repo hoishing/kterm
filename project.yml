@@ -29,7 +29,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: 4839LJ6XVW
         ENABLE_HARDENED_RUNTIME: NO
         CODE_SIGN_ENTITLEMENTS: Resources/kterm.entitlements
         # Find GhosttyKit.xcframework at the repo root.
@@ -80,7 +80,7 @@ targets:
         PRODUCT_NAME: ktermUITests
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: 4839LJ6XVW
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: kterm
     dependencies:
