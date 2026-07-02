@@ -27,6 +27,20 @@ Text file at `~/.config/kterm/config` (`key = value`). `kterm-` keys configure
 the app shell; everything else passes through to libghostty. See
 [`config.example`](./config.example).
 
+### Built-in options
+
+Baked-in defaults (override by setting the same key in your config):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `macos-option-as-alt` | `left` | Left ⌥ acts as Alt/Meta (e.g. for readline word-jump) |
+
+`kterm-` keys (app shell, no libghostty default):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
+
 ## Build
 
 Requires Xcode (with the Metal Toolchain component) and

@@ -14,3 +14,4 @@ font-size = 13
 theme = dark
 cursor-style = block
 # command = /bin/zsh
+# macos-option-as-alt = left   # kterm built-in default; uncomment to override

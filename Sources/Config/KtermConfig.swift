@@ -15,6 +15,13 @@ struct KtermConfig {
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
 
+    /// Built-in libghostty defaults, applied before the user's config file so
+    /// any matching key there overrides them (libghostty keeps the last value
+    /// for scalar keys).
+    private static let builtinDefaults = [
+        "macos-option-as-alt = left",
+    ]
+
     static var path: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/kterm/config")
@@ -22,6 +29,7 @@ struct KtermConfig {
 
     static func load() -> KtermConfig {
         var config = KtermConfig()
+        config.ghosttyLines = builtinDefaults
         guard let text = try? String(contentsOf: path, encoding: .utf8) else { return config }
 
         for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
