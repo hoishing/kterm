@@ -21,6 +21,9 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 - **Click-to-focus notifications** — clicking a desktop notification brings
   kterm forward and focuses the exact tab that raised it (restoring the window
   if minimized)
+- **Drag & drop files** — dropping a file (e.g. an image) onto the terminal
+  inserts its shell-escaped path into the buffer, so tools like the Claude Code
+  CLI can pick it up as `[Image #1]`
 
 ## Shortcuts
 

@@ -55,6 +55,7 @@ final class SurfaceView: NSView, NSTextInputClient {
         }
 
         postsFrameChangedNotifications = true
+        registerForDraggedTypes(Array(Self.dropTypes))
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
@@ -337,5 +338,66 @@ final class SurfaceView: NSView, NSTextInputClient {
         } else if clearIfNeeded {
             ghostty_surface_preedit(surface, nil, 0)
         }
+    }
+
+    /// Write UTF-8 text straight into the terminal, as if it were typed. Used
+    /// for drops, where there is no key event to accumulate through.
+    fileprivate func sendText(_ string: String) {
+        guard let surface, !string.isEmpty else { return }
+        let len = string.utf8CString.count
+        if len > 1 {
+            string.withCString { ghostty_surface_text(surface, $0, UInt(len - 1)) }
+        }
+    }
+}
+
+// MARK: - Drag & drop
+
+extension SurfaceView {
+    /// Pasteboard types we accept when something is dragged onto the surface.
+    fileprivate static let dropTypes: Set<NSPasteboard.PasteboardType> = [
+        .string, .fileURL, .URL,
+    ]
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard let types = sender.draggingPasteboard.types,
+              !Set(types).isDisjoint(with: Self.dropTypes)
+        else { return [] }
+        // .copy so the cursor shows the "+" badge.
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let pb = sender.draggingPasteboard
+
+        let content: String?
+        if let url = pb.string(forType: .URL) {
+            // A plain URL (e.g. dragged from a browser): escape as-is.
+            content = Self.shellEscape(url)
+        } else if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL],
+                  !urls.isEmpty {
+            // File(s): escape each path and space-join so multiple drops land as
+            // separate shell arguments.
+            content = urls.map { Self.shellEscape($0.path) }.joined(separator: " ")
+        } else {
+            // Fall back to any plain-string payload, inserted verbatim.
+            content = pb.string(forType: .string)
+        }
+
+        guard let content, !content.isEmpty else { return false }
+        window?.makeFirstResponder(self)
+        sendText(content)
+        return true
+    }
+
+    /// Backslash-escape shell-sensitive characters so a dropped path/URL lands
+    /// as a single token in the live terminal buffer.
+    private static let escapeCharacters = "\\ ()[]{}<>\"'`!#$&;|*?\t"
+    private static func shellEscape(_ str: String) -> String {
+        var result = str
+        for char in escapeCharacters {
+            result = result.replacingOccurrences(of: String(char), with: "\\\(char)")
+        }
+        return result
     }
 }

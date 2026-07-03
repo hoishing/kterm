@@ -85,6 +85,20 @@ struct RootView: View {
         .frame(minWidth: 640, minHeight: 400)
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
+        .overlay(alignment: .bottomTrailing) { uiTestDragSource }
+    }
+
+    /// A UI-test-only drag source overlaid on the terminal corner, present only
+    /// when launched with `KTERM_UITEST_DRAG_PATH` (see `DragImageDropTests`).
+    /// Empty — and compiled out entirely — otherwise.
+    @ViewBuilder private var uiTestDragSource: some View {
+        #if DEBUG
+        if let path = ProcessInfo.processInfo.environment["KTERM_UITEST_DRAG_PATH"] {
+            UITestDragSource(fileURL: URL(fileURLWithPath: path))
+                .frame(width: 44, height: 44)
+                .padding(8)
+        }
+        #endif
     }
 
     /// A thin, full-height strip just right of the divider that resizes the
