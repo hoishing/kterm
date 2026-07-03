@@ -5,6 +5,20 @@
 A minimal native macOS terminal: a SwiftUI app shell around `libghostty` (the
 real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 
+## Features
+
+- **Two-level tabs** — vertical tabs (sidebar groups) and horizontal tabs
+  (terminals within a group)
+- **Git branch in sidebar** — shows the active tab's branch, refreshed on
+  `cd`/`git checkout` and when the window regains focus
+- **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
+  shortcut
+- **Smart notification suppression** — bell/OSC 9/OSC 777 notifications fire
+  only when you're not already looking at that exact tab
+- **Click-to-focus notifications** — clicking a desktop notification brings
+  kterm forward and focuses the exact tab that raised it (restoring the window
+  if minimized)
+
 ## Shortcuts
 
 | Key | Action |
@@ -40,6 +54,16 @@ Baked-in defaults (override by setting the same key in your config):
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
+
+## Addressing a tab
+
+Each tab's shell gets a `KTERM_TAB_ID` environment variable holding that tab's
+id. Opening `kterm://focus-tab?id=<id>` raises that tab (the mechanism behind
+click-to-focus notifications), so a script can jump you back to its own tab:
+
+```sh
+open "kterm://focus-tab?id=$KTERM_TAB_ID"
+```
 
 ## Build
 

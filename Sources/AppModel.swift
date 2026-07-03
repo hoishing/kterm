@@ -18,7 +18,9 @@ final class Terminal: Identifiable {
 
     init(app: GhosttyApp) {
         // `app.app` is guaranteed non-nil once the app launched successfully.
-        self.surfaceView = SurfaceView(app: app.app!)
+        // `id` (a stored `let` with a default) is already initialized here, so
+        // the surface can be tagged with this tab's id via `KTERM_TAB_ID`.
+        self.surfaceView = SurfaceView(app: app.app!, tabID: id)
     }
 
     /// A label for the tab strip: the working directory path relative to
@@ -74,12 +76,17 @@ final class AppModel {
 
     let ghostty: GhosttyApp
 
+    /// The single live model, so `AppDelegate` (which owns the notification
+    /// delegate) can route a notification tap back to it.
+    static weak var shared: AppModel?
+
     var selectedGroup: TabGroup? {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
 
     init(ghostty: GhosttyApp) {
         self.ghostty = ghostty
+        Self.shared = self
         // Start with one vertical tab containing one terminal.
         newVerticalTab()
 
@@ -159,6 +166,22 @@ final class AppModel {
         select(group: groups[next])
     }
 
+    /// Bring kterm to the front and focus the tab that raised a desktop
+    /// notification, restoring the window if it was minimized. No-op if the
+    /// tab has since closed.
+    func focusTerminal(withID id: UUID) {
+        for group in groups {
+            guard let tab = group.tabs.first(where: { $0.id == id }) else { continue }
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = tab.surfaceView.window {
+                if window.isMiniaturized { window.deminiaturize(nil) }
+                window.makeKeyAndOrderFront(nil)
+            }
+            select(tab: tab, in: group)
+            return
+        }
+    }
+
     func select(tab: Terminal, in group: TabGroup) {
         selectedGroupID = group.id
         group.selectedTabID = tab.id
@@ -203,7 +226,7 @@ final class AppModel {
             // at it and should be told.
             let isFocused = NSApp.isActive && self.selectedGroup?.selectedTab?.id == term.id
             guard !isFocused else { return }
-            NotificationManager.post(title: title, body: body)
+            NotificationManager.post(title: title, body: body, terminalID: term.id)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }

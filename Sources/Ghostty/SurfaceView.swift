@@ -27,7 +27,7 @@ final class SurfaceView: NSView, NSTextInputClient {
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
-    init(app: ghostty_app_t) {
+    init(app: ghostty_app_t, tabID: UUID) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
         var cfg = ghostty_surface_config_new()
@@ -36,7 +36,21 @@ final class SurfaceView: NSView, NSTextInputClient {
         cfg.platform = ghostty_platform_u(macos: ghostty_platform_macos_s(
             nsview: Unmanaged.passUnretained(self).toOpaque()))
         cfg.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2)
-        self.surface = ghostty_surface_new(app, &cfg)
+
+        // Expose this tab's id to its shell as `KTERM_TAB_ID`, so a program in
+        // the tab can address it — e.g. `open "kterm://focus-tab?id=$KTERM_TAB_ID"`
+        // raises this exact tab. It's also how a desktop notification routes a
+        // tap back to the tab that raised it (see AppDelegate / NotificationManager).
+        self.surface = "KTERM_TAB_ID".withCString { keyPtr in
+            tabID.uuidString.withCString { valPtr in
+                var env = ghostty_env_var_s(key: keyPtr, value: valPtr)
+                return withUnsafeMutablePointer(to: &env) { envPtr in
+                    cfg.env_vars = envPtr
+                    cfg.env_var_count = 1
+                    return ghostty_surface_new(app, &cfg)
+                }
+            }
+        }
 
         postsFrameChangedNotifications = true
     }

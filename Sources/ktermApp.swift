@@ -24,6 +24,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) {
         completionHandler([.banner, .sound])
     }
+
+    // Tapping a notification brings kterm forward and focuses the tab that
+    // raised it — its id was stashed in `userInfo` by `NotificationManager`.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let idString = response.notification.request.content.userInfo["terminalID"] as? String,
+           let id = UUID(uuidString: idString) {
+            Task { @MainActor in AppModel.shared?.focusTerminal(withID: id) }
+        }
+        completionHandler()
+    }
+
+    // A `kterm://focus-tab?id=<uuid>` URL raises the tab with that id — the same
+    // routing a notification tap uses (both go through `AppModel.focusTerminal`).
+    // A program in a tab finds its own id in the `KTERM_TAB_ID` env var.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "kterm" && url.host == "focus-tab" {
+            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                  let idString = items.first(where: { $0.name == "id" })?.value,
+                  let id = UUID(uuidString: idString) else { continue }
+            Task { @MainActor in AppModel.shared?.focusTerminal(withID: id) }
+        }
+    }
 }
 
 @main

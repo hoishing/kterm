@@ -13,11 +13,15 @@ enum NotificationManager {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    static func post(title: String, body: String) {
+    /// `terminalID` is stashed in `userInfo` so a tap on the notification can
+    /// be routed back to the exact tab that raised it — see
+    /// `AppDelegate.userNotificationCenter(_:didReceive:)`.
+    static func post(title: String, body: String, terminalID: UUID) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        content.userInfo = ["terminalID": terminalID.uuidString]
         let request = UNNotificationRequest(
             identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
