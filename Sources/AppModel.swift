@@ -221,12 +221,14 @@ final class AppModel {
         }
         term.surfaceView.onNotification = { [weak self, weak term] title, body in
             guard let self, let term else { return }
-            // Suppress only when kterm is frontmost AND this exact tab is
-            // the one currently visible — otherwise the user isn't looking
-            // at it and should be told.
-            let isFocused = NSApp.isActive && self.selectedGroup?.selectedTab?.id == term.id
-            guard !isFocused else { return }
-            NotificationManager.post(title: title, body: body, terminalID: term.id)
+            self.notify(from: term, title: title, body: body)
+        }
+        // A terminal bell (BEL) becomes a system notification too, so the same
+        // "task done / needs input" cue works whether a program uses the bell
+        // or an explicit OSC 9/777 notification.
+        term.surfaceView.onBell = { [weak self, weak term] in
+            guard let self, let term else { return }
+            self.notify(from: term, title: "Bell", body: term.displayTitle)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
@@ -237,6 +239,16 @@ final class AppModel {
             }
         }
         return term
+    }
+
+    /// Posts a system notification for `term`, unless the user is already
+    /// looking at it — kterm frontmost AND this exact tab visible — in which
+    /// case there's nothing to be told. The `terminalID` lets a tap on the
+    /// notification focus this tab (see `focusTerminal(withID:)`).
+    private func notify(from term: Terminal, title: String, body: String) {
+        let isFocused = NSApp.isActive && selectedGroup?.selectedTab?.id == term.id
+        guard !isFocused else { return }
+        NotificationManager.post(title: title, body: body, terminalID: term.id)
     }
 
     /// Re-resolves `term`'s git branch from its current `pwd`, off the main

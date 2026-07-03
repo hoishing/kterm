@@ -20,8 +20,10 @@ final class SurfaceView: NSView, NSTextInputClient {
     /// Called when the underlying shell process exits / surface requests close.
     var onClose: (() -> Void)?
     /// Called when libghostty wants to show a desktop notification
-    /// (bell / OSC 9 / OSC 777).
+    /// (OSC 9 / OSC 777).
     var onNotification: ((_ title: String, _ body: String) -> Void)?
+    /// Called when the shell rings the terminal bell (BEL / `\a`).
+    var onBell: (() -> Void)?
 
     // IME / key-input state.
     private var markedText = NSMutableAttributedString()

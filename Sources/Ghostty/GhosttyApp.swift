@@ -154,6 +154,14 @@ final class GhosttyApp {
             DispatchQueue.main.async { view.onNotification?(title, body) }
             return true
 
+        case GHOSTTY_ACTION_RING_BELL:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async { view.onBell?() }
+            return true
+
         default:
             return false
         }

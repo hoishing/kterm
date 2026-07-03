@@ -13,6 +13,9 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
   `cd`/`git checkout` and when the window regains focus
 - **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
   shortcut
+- **Terminal bell notifications** — a terminal bell (BEL / `\a`) raises a macOS
+  notification, so a bell-based cue (e.g. a CLI tool set to notify via the
+  terminal bell) surfaces even when kterm is in the background
 - **Smart notification suppression** — bell/OSC 9/OSC 777 notifications fire
   only when you're not already looking at that exact tab
 - **Click-to-focus notifications** — clicking a desktop notification brings
