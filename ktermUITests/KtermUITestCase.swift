@@ -61,4 +61,40 @@ class KtermUITestCase: XCTestCase {
         expectation(for: predicate, evaluatedWith: element)
         waitForExpectations(timeout: timeout)
     }
+
+    // MARK: - Multi-window helpers
+
+    /// Polls until the app has exactly `count` windows (or times out).
+    func waitForWindowCount(_ count: Int, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if app.windows.count == count { return true }
+            Thread.sleep(forTimeInterval: 0.1)
+        } while Date() < deadline
+        return app.windows.count == count
+    }
+
+    /// The window whose (only) sidebar row shows `label`, letting tests tell
+    /// windows apart by the working directory typed into each.
+    func window(withSidebarLabel label: String) -> XCUIElement? {
+        for i in 0..<app.windows.count {
+            let w = app.windows.element(boundBy: i)
+            let row = w.buttons.matching(identifier: "sidebar.row").element(boundBy: 0)
+            if row.exists, row.label == label { return w }
+        }
+        return nil
+    }
+
+    /// Polls until the window identified by `label` holds `count` horizontal
+    /// tab chips (or times out).
+    func waitForTabChipCount(_ count: Int, inWindowWithSidebarLabel label: String,
+                             timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if let w = window(withSidebarLabel: label),
+               w.buttons.matching(identifier: "tabstrip.tab").count == count { return true }
+            Thread.sleep(forTimeInterval: 0.1)
+        } while Date() < deadline
+        return false
+    }
 }

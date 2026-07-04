@@ -83,9 +83,17 @@ final class AppModel {
     /// Where a new tab lands relative to the current one (`kterm-new-tab-position`).
     let newTabPosition: KtermConfig.NewTabPosition
 
-    /// The single live model, so `AppDelegate` (which owns the notification
-    /// delegate) can route a notification tap back to it.
-    static weak var shared: AppModel?
+    /// This model's NSWindow, captured once it's on screen (see
+    /// `WindowConfigurator`). Used to raise/cycle windows.
+    weak var window: NSWindow?
+
+    /// Every live window's model, oldest first. Weakly held so a closed
+    /// window's model drops out on its own. Lets ⌘` cycle windows and lets a
+    /// notification tap reach whichever window owns the tab (`AppModel` is a
+    /// per-window state, one per open window).
+    private final class Box { weak var model: AppModel?; init(_ m: AppModel) { model = m } }
+    private static var registry: [Box] = []
+    static var all: [AppModel] { registry.compactMap(\.model) }
 
     var selectedGroup: TabGroup? {
         groups.first { $0.id == selectedGroupID } ?? groups.first
@@ -94,7 +102,8 @@ final class AppModel {
     init(ghostty: GhosttyApp, newTabPosition: KtermConfig.NewTabPosition = .afterCurrent) {
         self.ghostty = ghostty
         self.newTabPosition = newTabPosition
-        Self.shared = self
+        Self.registry.removeAll { $0.model == nil }
+        Self.registry.append(Box(self))
         // Start with one vertical tab containing one terminal.
         newVerticalTab()
 
@@ -184,6 +193,25 @@ final class AppModel {
         else { return }
         let next = (cur + delta + groups.count) % groups.count
         select(group: groups[next])
+    }
+
+    /// ⌘` — cycle key focus through kterm's windows (wrapping). No-op with
+    /// fewer than two windows on screen.
+    static func cycleWindow() {
+        let models = all.filter { $0.window != nil }
+        guard models.count > 1 else { return }
+        let key = NSApp.keyWindow
+        let idx = models.firstIndex { $0.window === key } ?? 0
+        let next = models[(idx + 1) % models.count]
+        NSApp.activate(ignoringOtherApps: true)
+        next.window?.makeKeyAndOrderFront(nil)
+        next.focusSelected()
+    }
+
+    /// Route a notification tap (or `kterm://focus-tab` URL) to whichever
+    /// window owns the tab. Only the owning model reacts; the rest no-op.
+    static func focusTerminalAnyWindow(withID id: UUID) {
+        for model in all { model.focusTerminal(withID: id) }
     }
 
     /// Bring kterm to the front and focus the tab that raised a desktop

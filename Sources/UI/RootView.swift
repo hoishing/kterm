@@ -84,7 +84,7 @@ struct RootView: View {
         }
         .frame(minWidth: 640, minHeight: 400)
         .ignoresSafeArea(.container, edges: .top)
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(model: model))
         .overlay(alignment: .bottomTrailing) { uiTestDragSource }
     }
 
@@ -218,10 +218,14 @@ struct WindowDragArea: NSViewRepresentable {
 /// NOT movable by its background — only `WindowDragArea` (the titlebar above the
 /// sidebar) moves it — so the terminal keeps its own mouse drags for selection.
 struct WindowConfigurator: NSViewRepresentable {
+    let model: AppModel
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             view.window?.isMovableByWindowBackground = false
+            // Hand the window to the model so ⌘` window cycling can raise it.
+            model.window = view.window
         }
         return view
     }
