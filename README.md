@@ -24,6 +24,8 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 - **Drag & drop files** — dropping a file (e.g. an image) onto the terminal
   inserts its shell-escaped path into the buffer, so tools like the Claude Code
   CLI can pick it up as `[Image #1]`
+- **Open a folder** — `open -a kterm <dir>` (or Finder "Open With" / dropping a
+  folder on the app icon) opens a new tab whose shell starts in that folder
 
 ## Shortcuts
 

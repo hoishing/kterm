@@ -35,7 +35,11 @@ final class SurfaceView: NSView, NSTextInputClient {
     ///   `ghostty_surface_inherited_config` (honouring the
     ///   `window-inherit-working-directory` setting). `nil` for the first tab,
     ///   which starts from the plain default config.
-    init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil) {
+    /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
+    ///   folder passed to `open -a kterm <dir>` or dropped on the app icon). It
+    ///   overrides any inherited cwd. `nil` to keep the default / inherited one.
+    init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil,
+         workingDirectory: String? = nil) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
         var cfg = parent.map {
@@ -57,7 +61,14 @@ final class SurfaceView: NSView, NSTextInputClient {
                 return withUnsafeMutablePointer(to: &env) { envPtr in
                     cfg.env_vars = envPtr
                     cfg.env_var_count = 1
-                    return ghostty_surface_new(app, &cfg)
+                    // If an explicit working directory was requested, point the
+                    // surface at it (overriding any inherited cwd). The C string
+                    // must outlive `ghostty_surface_new`.
+                    guard let workingDirectory else { return ghostty_surface_new(app, &cfg) }
+                    return workingDirectory.withCString { dirPtr in
+                        cfg.working_directory = dirPtr
+                        return ghostty_surface_new(app, &cfg)
+                    }
                 }
             }
         }

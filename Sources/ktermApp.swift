@@ -39,15 +39,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         completionHandler()
     }
 
-    // A `kterm://focus-tab?id=<uuid>` URL raises the tab with that id — the same
-    // routing a notification tap uses (both go through `AppModel.focusTerminal`).
-    // A program in a tab finds its own id in the `KTERM_TAB_ID` env var.
+    // Handles the URLs/files kterm is asked to open:
+    //   * `kterm://focus-tab?id=<uuid>` raises the tab with that id — the same
+    //     routing a notification tap uses (both go through `AppModel.focusTerminal`).
+    //     A program in a tab finds its own id in the `KTERM_TAB_ID` env var.
+    //   * a folder (e.g. `open -a kterm <dir>`, or Finder "Open With" / a folder
+    //     dropped on the app icon) opens as a new tab whose shell starts there.
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.scheme == "kterm" && url.host == "focus-tab" {
-            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-                  let idString = items.first(where: { $0.name == "id" })?.value,
-                  let id = UUID(uuidString: idString) else { continue }
-            Task { @MainActor in AppModel.focusTerminalAnyWindow(withID: id) }
+        for url in urls {
+            if url.scheme == "kterm", url.host == "focus-tab" {
+                guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                      let idString = items.first(where: { $0.name == "id" })?.value,
+                      let id = UUID(uuidString: idString) else { continue }
+                Task { @MainActor in AppModel.focusTerminalAnyWindow(withID: id) }
+                continue
+            }
+            // Only directories make sense as a terminal cwd; ignore plain files.
+            var isDir: ObjCBool = false
+            guard url.isFileURL,
+                  FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                  isDir.boolValue else { continue }
+            let path = url.path
+            Task { @MainActor in AppModel.openDirectory(path) }
         }
     }
 }

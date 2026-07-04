@@ -19,12 +19,15 @@ final class Terminal: Identifiable {
     /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
     ///   the new surface opens in that tab's working directory. `nil` for the
     ///   very first tab.
-    init(app: GhosttyApp, inheritFrom parent: Terminal? = nil) {
+    /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
+    ///   folder passed to `open -a kterm <dir>`), overriding the inherited cwd.
+    init(app: GhosttyApp, inheritFrom parent: Terminal? = nil, workingDirectory: String? = nil) {
         // `app.app` is guaranteed non-nil once the app launched successfully.
         // `id` (a stored `let` with a default) is already initialized here, so
         // the surface can be tagged with this tab's id via `KTERM_TAB_ID`.
         self.surfaceView = SurfaceView(
-            app: app.app!, tabID: id, inheritFrom: parent?.surfaceView.surface)
+            app: app.app!, tabID: id, inheritFrom: parent?.surfaceView.surface,
+            workingDirectory: workingDirectory)
     }
 
     /// A label for the tab strip: the working directory path relative to
@@ -95,6 +98,11 @@ final class AppModel {
     private static var registry: [Box] = []
     static var all: [AppModel] { registry.compactMap(\.model) }
 
+    /// A directory requested via `open -a kterm <dir>` before any window
+    /// existed (cold launch). The first window created consumes it so its
+    /// initial tab opens there instead of the default cwd.
+    private static var pendingOpenDirectory: String?
+
     var selectedGroup: TabGroup? {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
@@ -104,8 +112,12 @@ final class AppModel {
         self.newTabPosition = newTabPosition
         Self.registry.removeAll { $0.model == nil }
         Self.registry.append(Box(self))
-        // Start with one vertical tab containing one terminal.
-        newVerticalTab()
+        // Start with one vertical tab containing one terminal. On a cold launch
+        // via `open -a kterm <dir>` the requested folder may already be waiting;
+        // consume it so the very first tab opens there.
+        let pending = Self.pendingOpenDirectory
+        Self.pendingOpenDirectory = nil
+        newVerticalTab(workingDirectory: pending)
 
         // Re-check the selected tab's branch when kterm regains focus, so an
         // in-shell `git checkout` made while another app was frontmost shows
@@ -121,11 +133,13 @@ final class AppModel {
     }
 
     /// ⌘N — new vertical tab (a fresh group with one terminal), selected. It
-    /// opens in the current tab's working directory (see `Terminal.init`).
-    func newVerticalTab() {
+    /// opens in the current tab's working directory (see `Terminal.init`), or in
+    /// `workingDirectory` when one is given (e.g. `open -a kterm <dir>`).
+    func newVerticalTab(workingDirectory: String? = nil) {
         guard ghostty.app != nil else { return }
         let group = TabGroup()
-        let term = makeTerminal(inheritFrom: selectedGroup?.selectedTab)
+        let term = makeTerminal(inheritFrom: selectedGroup?.selectedTab,
+                                workingDirectory: workingDirectory)
         group.tabs.append(term)
         group.selectedTabID = term.id
         groups.insert(group, at: insertionIndex(in: groups, after: selectedGroupID))
@@ -208,6 +222,19 @@ final class AppModel {
         next.focusSelected()
     }
 
+    /// Open `path` as a new vertical tab in the front kterm window, bringing the
+    /// app forward. Used for a folder passed to `open -a kterm <dir>` (or dropped
+    /// on the app icon / Finder "Open With"). If no window exists yet — a cold
+    /// launch racing ahead of window creation — the path is stashed so the first
+    /// window's initial tab opens there instead (see `init`).
+    static func openDirectory(_ path: String) {
+        let model = all.first { $0.window === NSApp.keyWindow } ?? all.first
+        guard let model else { pendingOpenDirectory = path; return }
+        NSApp.activate(ignoringOtherApps: true)
+        model.window?.makeKeyAndOrderFront(nil)
+        model.newVerticalTab(workingDirectory: path)
+    }
+
     /// Route a notification tap (or `kterm://focus-tab` URL) to whichever
     /// window owns the tab. Only the owning model reacts; the rest no-op.
     static func focusTerminalAnyWindow(withID id: UUID) {
@@ -258,8 +285,9 @@ final class AppModel {
         focusSelected()
     }
 
-    private func makeTerminal(inheritFrom parent: Terminal? = nil) -> Terminal {
-        let term = Terminal(app: ghostty, inheritFrom: parent)
+    private func makeTerminal(inheritFrom parent: Terminal? = nil,
+                              workingDirectory: String? = nil) -> Terminal {
+        let term = Terminal(app: ghostty, inheritFrom: parent, workingDirectory: workingDirectory)
         term.surfaceView.onTitleChange = { [weak term] title in
             term?.title = title
         }
