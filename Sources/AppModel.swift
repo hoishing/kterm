@@ -276,7 +276,7 @@ final class AppModel {
         // or an explicit OSC 9/777 notification.
         term.surfaceView.onBell = { [weak self, weak term] in
             guard let self, let term else { return }
-            self.notify(from: term, title: "Bell", body: term.displayTitle)
+            self.notify(from: term, title: "🔔", body: term.displayTitle)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
