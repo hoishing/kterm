@@ -62,7 +62,8 @@ struct KtermApp: App {
         let config = KtermConfig.load()
         self.config = config
         let ghostty = GhosttyApp(config: config)
-        _model = State(initialValue: AppModel(ghostty: ghostty))
+        _model = State(initialValue: AppModel(
+            ghostty: ghostty, newTabPosition: config.newTabPosition))
     }
 
     var body: some Scene {

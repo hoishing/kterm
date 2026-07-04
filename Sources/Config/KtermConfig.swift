@@ -9,8 +9,19 @@ import GhosttyKit
 /// (font-family, font-size, theme, background, cursor-style, command, ...) works
 /// unchanged.
 struct KtermConfig {
+    /// Where a newly created tab is inserted. `kterm-new-tab-position`.
+    enum NewTabPosition: String {
+        /// Append after all existing tabs.
+        case end
+        /// Insert right after the current tab, pushing later tabs back (default).
+        case afterCurrent = "after-current"
+    }
+
     /// Width of the vertical (sidebar) tab column, in points. `kterm-sidebar-width`.
     var sidebarWidth: CGFloat = 160
+
+    /// Placement of new ⌘N/⌘T tabs. `kterm-new-tab-position`.
+    var newTabPosition: NewTabPosition = .afterCurrent
 
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
@@ -55,6 +66,8 @@ struct KtermConfig {
         switch key {
         case "kterm-sidebar-width":
             if let w = Double(value), w > 0 { sidebarWidth = CGFloat(w) }
+        case "kterm-new-tab-position":
+            if let p = NewTabPosition(rawValue: value) { newTabPosition = p }
         default:
             break // unknown kterm- key: ignore
         }

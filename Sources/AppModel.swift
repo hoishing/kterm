@@ -16,11 +16,15 @@ final class Terminal: Identifiable {
     var branch: String?
     let surfaceView: SurfaceView
 
-    init(app: GhosttyApp) {
+    /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
+    ///   the new surface opens in that tab's working directory. `nil` for the
+    ///   very first tab.
+    init(app: GhosttyApp, inheritFrom parent: Terminal? = nil) {
         // `app.app` is guaranteed non-nil once the app launched successfully.
         // `id` (a stored `let` with a default) is already initialized here, so
         // the surface can be tagged with this tab's id via `KTERM_TAB_ID`.
-        self.surfaceView = SurfaceView(app: app.app!, tabID: id)
+        self.surfaceView = SurfaceView(
+            app: app.app!, tabID: id, inheritFrom: parent?.surfaceView.surface)
     }
 
     /// A label for the tab strip: the working directory path relative to
@@ -76,6 +80,9 @@ final class AppModel {
 
     let ghostty: GhosttyApp
 
+    /// Where a new tab lands relative to the current one (`kterm-new-tab-position`).
+    let newTabPosition: KtermConfig.NewTabPosition
+
     /// The single live model, so `AppDelegate` (which owns the notification
     /// delegate) can route a notification tap back to it.
     static weak var shared: AppModel?
@@ -84,8 +91,9 @@ final class AppModel {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
 
-    init(ghostty: GhosttyApp) {
+    init(ghostty: GhosttyApp, newTabPosition: KtermConfig.NewTabPosition = .afterCurrent) {
         self.ghostty = ghostty
+        self.newTabPosition = newTabPosition
         Self.shared = self
         // Start with one vertical tab containing one terminal.
         newVerticalTab()
@@ -103,24 +111,36 @@ final class AppModel {
         }
     }
 
-    /// ⌘N — new vertical tab (a fresh group with one terminal), selected.
+    /// ⌘N — new vertical tab (a fresh group with one terminal), selected. It
+    /// opens in the current tab's working directory (see `Terminal.init`).
     func newVerticalTab() {
         guard ghostty.app != nil else { return }
         let group = TabGroup()
-        let term = makeTerminal()
+        let term = makeTerminal(inheritFrom: selectedGroup?.selectedTab)
         group.tabs.append(term)
         group.selectedTabID = term.id
-        groups.append(group)
+        groups.insert(group, at: insertionIndex(in: groups, after: selectedGroupID))
         selectedGroupID = group.id
     }
 
-    /// ⌘T — new horizontal tab (a terminal in the current group), selected.
+    /// ⌘T — new horizontal tab (a terminal in the current group), selected. It
+    /// opens in the current tab's working directory (see `Terminal.init`).
     func newHorizontalTab() {
         guard ghostty.app != nil else { return }
         guard let group = selectedGroup else { newVerticalTab(); return }
-        let term = makeTerminal()
-        group.tabs.append(term)
+        let term = makeTerminal(inheritFrom: group.selectedTab)
+        group.tabs.insert(term, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
         group.selectedTabID = term.id
+    }
+
+    /// The slot a freshly spawned sibling should occupy. With
+    /// `kterm-new-tab-position = after-current` it lands right after the tab it
+    /// was spawned from (pushing the rest back); otherwise it goes to the end.
+    private func insertionIndex<T: Identifiable>(in items: [T], after currentID: T.ID?) -> Int {
+        guard newTabPosition == .afterCurrent, let currentID,
+              let idx = items.firstIndex(where: { $0.id == currentID })
+        else { return items.count }
+        return idx + 1
     }
 
     /// ⌘W — close the active horizontal tab. If the group empties, drop it; if
@@ -210,8 +230,8 @@ final class AppModel {
         focusSelected()
     }
 
-    private func makeTerminal() -> Terminal {
-        let term = Terminal(app: ghostty)
+    private func makeTerminal(inheritFrom parent: Terminal? = nil) -> Terminal {
+        let term = Terminal(app: ghostty, inheritFrom: parent)
         term.surfaceView.onTitleChange = { [weak term] title in
             term?.title = title
         }

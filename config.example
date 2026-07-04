@@ -7,6 +7,8 @@
 
 # --- app shell (kterm-only) ---
 kterm-sidebar-width = 160
+# Where a new ⌘N/⌘T tab lands: after-current (default) or end
+kterm-new-tab-position = after-current
 
 # --- terminal (libghostty) ---
 font-family = JetBrains Mono

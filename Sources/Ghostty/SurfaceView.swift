@@ -29,10 +29,18 @@ final class SurfaceView: NSView, NSTextInputClient {
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
-    init(app: ghostty_app_t, tabID: UUID) {
+    /// - Parameter inheritFrom: the surface of the tab that triggered this one.
+    ///   When set, the new surface inherits that surface's config — most
+    ///   importantly its working directory — via libghostty's
+    ///   `ghostty_surface_inherited_config` (honouring the
+    ///   `window-inherit-working-directory` setting). `nil` for the first tab,
+    ///   which starts from the plain default config.
+    init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
-        var cfg = ghostty_surface_config_new()
+        var cfg = parent.map {
+            ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB)
+        } ?? ghostty_surface_config_new()
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.platform_tag = GHOSTTY_PLATFORM_MACOS
         cfg.platform = ghostty_platform_u(macos: ghostty_platform_macos_s(

@@ -1,6 +1,8 @@
 - refer cmux/ for the vertical + horizontal tab layout
 - refer ghostling/ for how to use `libghostty`
 - use swift, swiftUI for app shell, and `libghostty` for the core functionality
+- new tabs inherit the triggering tab's cwd (via `ghostty_surface_inherited_config`)
+  and default to opening right after it (`kterm-new-tab-position = after-current`)
 - "build the app" means: Release build for arm64 only (`ARCHS=arm64`;
   GhosttyKit.xcframework has no x86_64), then copy the product over
   `/Applications/kterm.app` (fixed path keeps its Full Disk Access grant)

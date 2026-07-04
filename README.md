@@ -60,6 +60,10 @@ Baked-in defaults (override by setting the same key in your config):
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
+| `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
+
+New tabs inherit the working directory of the tab they were opened from
+(honouring libghostty's `window-inherit-working-directory`).
 
 ## Addressing a tab
 
