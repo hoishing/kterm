@@ -25,7 +25,9 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
   inserts its shell-escaped path into the buffer, so tools like the Claude Code
   CLI can pick it up as `[Image #1]`
 - **Open a folder** — `open -a kterm <dir>` (or Finder "Open With" / dropping a
-  folder on the app icon) opens a new tab whose shell starts in that folder
+  folder on the app icon) opens a new tab whose shell starts in that folder,
+  reusing the current window rather than spawning a new one (a cold launch still
+  gets its first window)
 
 ## Shortcuts
 

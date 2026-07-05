@@ -99,6 +99,7 @@ struct KtermApp: App {
         // Hardcodes Ghostty's `macos-titlebar-style = tabs`: hide the system
         // titlebar so the tab strip (RootView) fills it edge to edge.
         .windowStyle(.hiddenTitleBar)
+        .handlesExternalEvents(matching: [])
         .commands { KtermCommands() }
     }
 }
@@ -146,6 +147,12 @@ private struct KtermCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        // Hand `AppModel` a way to open a window on a cold `open -a kterm <dir>`
+        // (the WindowGroup won't auto-open one — see `handlesExternalEvents`).
+        // The commands/menu are built at launch even before any window exists,
+        // so this closure is available when the folder-open arrives.
+        let openWindow = openWindow
+        let _ = (AppModel.openNewWindow = { openWindow(id: "main") })
         // Replace the default New Window (⌘N) with kterm's tab commands, plus
         // ⌘⇧N to open a new window.
         CommandGroup(replacing: .newItem) {

@@ -103,6 +103,13 @@ final class AppModel {
     /// initial tab opens there instead of the default cwd.
     private static var pendingOpenDirectory: String?
 
+    /// Opens a fresh kterm window (SwiftUI `openWindow(id:)`), wired up by
+    /// `KtermCommands`. The WindowGroup declines to auto-open a window for
+    /// external opens (`.handlesExternalEvents(matching:)`, so warm
+    /// `open -a kterm <dir>` doesn't spawn a surplus window); this lets a cold
+    /// launch still get its first window (see `openDirectory`).
+    static var openNewWindow: (() -> Void)?
+
     var selectedGroup: TabGroup? {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
@@ -228,8 +235,14 @@ final class AppModel {
     /// launch racing ahead of window creation — the path is stashed so the first
     /// window's initial tab opens there instead (see `init`).
     static func openDirectory(_ path: String) {
-        let model = all.first { $0.window === NSApp.keyWindow } ?? all.first
-        guard let model else { pendingOpenDirectory = path; return }
+        guard let model = all.first(where: { $0.window === NSApp.keyWindow }) ?? all.first else {
+            // Cold launch — no window exists yet, and our WindowGroup won't
+            // auto-open one for an external open. Stash the folder for the first
+            // window's initial tab, then ask SwiftUI to create that window.
+            pendingOpenDirectory = path
+            openNewWindow?()
+            return
+        }
         NSApp.activate(ignoringOtherApps: true)
         model.window?.makeKeyAndOrderFront(nil)
         model.newVerticalTab(workingDirectory: path)
