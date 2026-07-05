@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 /// Shared launch/teardown and terminal-interaction helpers for kterm's UI
@@ -60,6 +61,29 @@ class KtermUITestCase: XCTestCase {
         let predicate = NSPredicate(format: "label == %@", expected)
         expectation(for: predicate, evaluatedWith: element)
         waitForExpectations(timeout: timeout)
+    }
+
+    /// Drag-selects a rectangle of the terminal surface (normalized offsets),
+    /// ⌘C-copies it, and polls the system pasteboard until it contains `until`
+    /// (or times out), returning whatever ended up there. libghostty owns
+    /// selection and clipboard writes internally, so tests assert on the real
+    /// pasteboard rather than any SwiftUI/accessibility state.
+    func copyOfSelection(from: CGVector, to: CGVector, until: String,
+                         timeout: TimeInterval = 5) -> String {
+        NSPasteboard.general.clearContents()
+        let start = surface.coordinate(withNormalizedOffset: from)
+        let end = surface.coordinate(withNormalizedOffset: to)
+        start.press(forDuration: 0.1, thenDragTo: end)
+        app.typeKey("c", modifierFlags: .command)
+
+        let deadline = Date().addingTimeInterval(timeout)
+        var copied = ""
+        while Date() < deadline {
+            copied = NSPasteboard.general.string(forType: .string) ?? ""
+            if copied.contains(until) { break }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return copied
     }
 
     // MARK: - Multi-window helpers

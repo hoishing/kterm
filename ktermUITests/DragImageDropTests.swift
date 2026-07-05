@@ -47,19 +47,8 @@ final class DragImageDropTests: KtermUITestCase {
 
         // Select the top of the screen and copy it, then assert the dropped
         // path is sitting in the buffer.
-        NSPasteboard.general.clearContents()
-        let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.02))
-        let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.4))
-        start.press(forDuration: 0.1, thenDragTo: end)
-        app.typeKey("c", modifierFlags: .command)
-
-        let deadline = Date().addingTimeInterval(5)
-        var copied = ""
-        while Date() < deadline {
-            copied = NSPasteboard.general.string(forType: .string) ?? ""
-            if copied.contains(imagePath) { break }
-            Thread.sleep(forTimeInterval: 0.1)
-        }
+        let copied = copyOfSelection(
+            from: CGVector(dx: 0.01, dy: 0.02), to: CGVector(dx: 0.99, dy: 0.4), until: imagePath)
 
         XCTAssertTrue(
             copied.contains(imagePath),
