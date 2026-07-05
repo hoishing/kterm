@@ -16,6 +16,7 @@ struct Sidebar: View {
                             title: group.displayTitle,
                             branch: group.branch,
                             isSelected: group.id == model.selectedGroup?.id,
+                            hasUnread: group.hasUnread,
                             // Only the first 9 groups have a ⌘-digit shortcut.
                             shortcutNumber: index < 9 ? index + 1 : nil,
                             showsShortcutHint: cmdHold.isShowing,
@@ -54,6 +55,8 @@ private struct SidebarRow: View {
     /// Git branch of the tab's folder, if any — shown under the title.
     let branch: String?
     let isSelected: Bool
+    /// Any tab in this group has an unread notification → show a dot.
+    let hasUnread: Bool
     /// This row's ⌘-digit shortcut (1–9), or `nil` past the 9th tab.
     let shortcutNumber: Int?
     /// Whether the ⌘-hold hint pill should currently be visible.
@@ -67,17 +70,23 @@ private struct SidebarRow: View {
 
     var body: some View {
         Button(action: select) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: Self.titleFontSize))
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                if let branch {
-                    Text(branch)
-                        .font(.system(size: Self.titleFontSize - 2))
-                        .foregroundStyle(Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255))
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: Self.titleFontSize))
                         .lineLimit(1)
-                        .truncationMode(.tail)
+                        .truncationMode(.head)
+                    if let branch {
+                        Text(branch)
+                            .font(.system(size: Self.titleFontSize - 2))
+                            .foregroundStyle(Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+                Spacer(minLength: 0)
+                if hasUnread && !isSelected {
+                    UnreadDot()
                 }
             }
             .padding(.horizontal, 8)
@@ -96,6 +105,6 @@ private struct SidebarRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: showsShortcutHint)
         .accessibilityIdentifier("sidebar.row")
-        .accessibilityValue(isSelected ? "selected" : "unselected")
+        .accessibilityValue(isSelected ? "selected" : (hasUnread ? "unread" : "unselected"))
     }
 }

@@ -38,6 +38,7 @@ struct TabStrip: View {
                         TabChip(
                             title: tab.displayTitle,
                             isSelected: tab.id == group.selectedTab?.id,
+                            hasUnread: tab.hasUnread,
                             select: { model.select(tab: tab, in: group) },
                             close: { model.close(tab, in: group) }
                         )
@@ -75,6 +76,8 @@ struct TabStrip: View {
 private struct TabChip: View {
     let title: String
     let isSelected: Bool
+    /// This tab has an unread notification → show a dot.
+    let hasUnread: Bool
     let select: () -> Void
     let close: () -> Void
 
@@ -97,6 +100,10 @@ private struct TabChip: View {
                 .truncationMode(.head)
                 .font(.system(size: 12))
                 .frame(maxWidth: .infinity)
+
+            if hasUnread && !isSelected {
+                UnreadDot()
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -110,7 +117,7 @@ private struct TabChip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("tabstrip.tab")
         .accessibilityLabel(title)
-        .accessibilityValue(isSelected ? "selected" : "unselected")
+        .accessibilityValue(isSelected ? "selected" : (hasUnread ? "unread" : "unselected"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -124,5 +131,15 @@ enum TabHighlight {
         if isSelected { return Color.white.opacity(0.16) }
         if hovering { return Color.white.opacity(0.07) }
         return Color.clear
+    }
+}
+
+/// A small accent dot marking an unread notification, shared by the sidebar rows
+/// and the horizontal tab chips.
+struct UnreadDot: View {
+    var body: some View {
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 7, height: 7)
     }
 }

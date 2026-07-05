@@ -77,6 +77,7 @@ struct RootView: View {
                 if let term = model.selectedGroup?.selectedTab {
                     SurfaceContainer(terminal: term)
                         .id(term.id)
+                        .overlay { AttentionRing(pulse: term.attentionPulse) }
                 } else {
                     emptyState
                 }
@@ -268,5 +269,25 @@ struct SurfaceContainer: NSViewRepresentable {
             surface.topAnchor.constraint(equalTo: container.topAnchor),
             surface.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+    }
+}
+
+/// Flashes an accent-colored ring around the content area when the on-screen
+/// terminal receives a notification, mirroring cmux's attention flash ring.
+/// Driven by `Terminal.attentionPulse`; a bump replays a quick fade in/out.
+private struct AttentionRing: View {
+    let pulse: Int
+    @State private var opacity: Double = 0
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .stroke(Color.accentColor.opacity(opacity), lineWidth: 2.5)
+            .padding(1)
+            .allowsHitTesting(false)
+            .onChange(of: pulse) { _, _ in
+                opacity = 0
+                withAnimation(.easeOut(duration: 0.15)) { opacity = 1 }
+                withAnimation(.easeIn(duration: 0.55).delay(0.2)) { opacity = 0 }
+            }
     }
 }

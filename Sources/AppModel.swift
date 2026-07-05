@@ -16,6 +16,16 @@ final class Terminal: Identifiable {
     var branch: String?
     let surfaceView: SurfaceView
 
+    /// Has an unread notification/bell that the user hasn't looked at yet.
+    /// Set when a bell or OSC 9/777 notification arrives for a tab that isn't
+    /// frontmost-visible; cleared when the tab is selected or regains focus.
+    var hasUnread = false
+
+    /// Bumped whenever this terminal is the one on screen and a notification
+    /// arrives, driving the content-area attention flash (see `AttentionRing`).
+    private(set) var attentionPulse = 0
+    func pulseAttention() { attentionPulse &+= 1 }
+
     /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
     ///   the new surface opens in that tab's working directory. `nil` for the
     ///   very first tab.
@@ -68,6 +78,10 @@ final class TabGroup: Identifiable {
     /// Git branch shown under the folder title in the sidebar, mirroring the
     /// active terminal's `pwd`.
     var branch: String? { selectedTab?.branch }
+
+    /// Any horizontal tab in this group has an unread notification → the sidebar
+    /// row shows an unread dot.
+    var hasUnread: Bool { tabs.contains { $0.hasUnread } }
 }
 
 /// The whole window state: a list of vertical tabs (groups), each containing
@@ -135,6 +149,7 @@ final class AppModel {
             Task { @MainActor [weak self] in
                 guard let self, let term = self.selectedGroup?.selectedTab else { return }
                 self.refreshBranch(for: term)
+                self.markRead(term)
             }
         }
     }
@@ -183,7 +198,10 @@ final class AppModel {
     func select(group: TabGroup) {
         selectedGroupID = group.id
         focusSelected()
-        if let term = group.selectedTab { refreshBranch(for: term) }
+        if let term = group.selectedTab {
+            refreshBranch(for: term)
+            markRead(term)
+        }
     }
 
     /// ⌘1…⌘9 — select the vertical tab (group) at `index`, if it exists.
@@ -275,6 +293,7 @@ final class AppModel {
         group.selectedTabID = tab.id
         focusSelected()
         refreshBranch(for: tab)
+        markRead(tab)
     }
 
     func close(_ term: Terminal, in group: TabGroup) {
@@ -296,6 +315,7 @@ final class AppModel {
             group.selectedTabID = group.tabs[min(idx, group.tabs.count - 1)].id
         }
         focusSelected()
+        markRead(selectedGroup?.selectedTab)
     }
 
     private func makeTerminal(inheritFrom parent: Terminal? = nil,
@@ -335,10 +355,22 @@ final class AppModel {
     /// case there's nothing to be told. The `terminalID` lets a tap on the
     /// notification focus this tab (see `focusTerminal(withID:)`).
     private func notify(from term: Terminal, title: String, body: String) {
-        let isFocused = NSApp.isActive && selectedGroup?.selectedTab?.id == term.id
+        let isVisible = selectedGroup?.selectedTab?.id == term.id
+        // The terminal on screen just pinged → flash a ring around the content
+        // area, even when kterm is frontmost (e.g. a build finished while the
+        // user was reading its output).
+        if isVisible { term.pulseAttention() }
+        let isFocused = NSApp.isActive && isVisible
         guard !isFocused else { return }
+        // Not being looked at → leave an unread marker on its tab, and post a
+        // system notification.
+        term.hasUnread = true
         NotificationManager.post(title: title, body: body, terminalID: term.id)
     }
+
+    /// Clears a tab's unread marker once the user is looking at it (selected it
+    /// or brought kterm forward while it was the visible tab).
+    private func markRead(_ term: Terminal?) { term?.hasUnread = false }
 
     /// Re-resolves `term`'s git branch from its current `pwd`, off the main
     /// thread. Guards against races (pwd changing again mid-lookup, or the

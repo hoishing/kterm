@@ -63,6 +63,15 @@ class KtermUITestCase: XCTestCase {
         waitForExpectations(timeout: timeout)
     }
 
+    /// Waits until `element`'s accessibility value equals `expected` — used to
+    /// watch a tab flip between "selected", "unread", and "unselected" (see
+    /// `SidebarRow`/`TabChip`'s `.accessibilityValue`).
+    func waitForValue(_ element: XCUIElement, toEqual expected: String, timeout: TimeInterval = 5) {
+        let predicate = NSPredicate(format: "value == %@", expected)
+        expectation(for: predicate, evaluatedWith: element)
+        waitForExpectations(timeout: timeout)
+    }
+
     /// Drag-selects a rectangle of the terminal surface (normalized offsets),
     /// ⌘C-copies it, and polls the system pasteboard until it contains `until`
     /// (or times out), returning whatever ended up there. libghostty owns
