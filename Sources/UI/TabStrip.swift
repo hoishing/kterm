@@ -76,7 +76,8 @@ struct TabStrip: View {
 private struct TabChip: View {
     let title: String
     let isSelected: Bool
-    /// This tab has an unread notification → show a dot.
+    /// This tab has an unacknowledged notification → show a 🔔. Persists even
+    /// when selected; cleared only by interacting with the tab's content.
     let hasUnread: Bool
     let select: () -> Void
     let close: () -> Void
@@ -95,15 +96,18 @@ private struct TabChip: View {
             .help("Close tab (⌘W)")
             .accessibilityIdentifier("tabstrip.tab.close")
 
+            // Ghostty-style bell prefixing the title on an unacknowledged
+            // notification (mirrors `computeTitle`'s "🔔 " in ghostty's
+            // BaseTerminalController).
+            if hasUnread {
+                Text("🔔").font(.system(size: 11))
+            }
+
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .font(.system(size: 12))
                 .frame(maxWidth: .infinity)
-
-            if hasUnread && !isSelected {
-                UnreadDot()
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -117,7 +121,9 @@ private struct TabChip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("tabstrip.tab")
         .accessibilityLabel(title)
-        .accessibilityValue(isSelected ? "selected" : (hasUnread ? "unread" : "unselected"))
+        // Unread takes precedence over selected: with dismiss-on-interaction, a
+        // tab can be both selected and unread until the user interacts with it.
+        .accessibilityValue(hasUnread ? "unread" : (isSelected ? "selected" : "unselected"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -134,8 +140,8 @@ enum TabHighlight {
     }
 }
 
-/// A small accent dot marking an unread notification, shared by the sidebar rows
-/// and the horizontal tab chips.
+/// A small accent dot marking an unread notification on a sidebar row (the
+/// horizontal tab chips use a 🔔 instead, see `TabChip`).
 struct UnreadDot: View {
     var body: some View {
         Circle()

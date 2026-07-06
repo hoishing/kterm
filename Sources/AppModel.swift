@@ -16,9 +16,13 @@ final class Terminal: Identifiable {
     var branch: String?
     let surfaceView: SurfaceView
 
-    /// Has an unread notification/bell that the user hasn't looked at yet.
+    /// Has an unread notification/bell that the user hasn't acknowledged yet.
     /// Set when a bell or OSC 9/777 notification arrives for a tab that isn't
-    /// frontmost-visible; cleared when the tab is selected or regains focus.
+    /// frontmost-visible; drives the sidebar row's dot and the horizontal tab's
+    /// 🔔. Cleared only when the user interacts with the tab's content area — a
+    /// keystroke or click — together with `showAttention` (see
+    /// `SurfaceView.onInteraction`). Selecting the tab or bringing kterm forward
+    /// does NOT clear it.
     var hasUnread = false
 
     /// True while this on-screen terminal has an unacknowledged notification,
@@ -152,7 +156,6 @@ final class AppModel {
             Task { @MainActor [weak self] in
                 guard let self, let term = self.selectedGroup?.selectedTab else { return }
                 self.refreshBranch(for: term)
-                self.markRead(term)
             }
         }
     }
@@ -203,7 +206,6 @@ final class AppModel {
         focusSelected()
         if let term = group.selectedTab {
             refreshBranch(for: term)
-            markRead(term)
         }
     }
 
@@ -296,7 +298,6 @@ final class AppModel {
         group.selectedTabID = tab.id
         focusSelected()
         refreshBranch(for: tab)
-        markRead(tab)
     }
 
     func close(_ term: Terminal, in group: TabGroup) {
@@ -318,7 +319,6 @@ final class AppModel {
             group.selectedTabID = group.tabs[min(idx, group.tabs.count - 1)].id
         }
         focusSelected()
-        markRead(selectedGroup?.selectedTab)
     }
 
     private func makeTerminal(inheritFrom parent: Terminal? = nil,
@@ -342,11 +342,13 @@ final class AppModel {
             guard let self, let term else { return }
             self.notify(from: term, title: "🔔", body: term.displayTitle)
         }
-        // A keystroke or click in the content area acknowledges the attention
-        // border and dismisses it.
+        // A keystroke or click in the content area acknowledges the tab's
+        // notification: the attention border and the unread marker (sidebar dot
+        // / horizontal-tab 🔔) dismiss together.
         term.surfaceView.onInteraction = { [weak term] in
-            guard let term, term.showAttention else { return }
+            guard let term, term.showAttention || term.hasUnread else { return }
             term.showAttention = false
+            term.hasUnread = false
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
@@ -372,15 +374,12 @@ final class AppModel {
         if isVisible { term.showAttention = true }
         let isFocused = NSApp.isActive && isVisible
         guard !isFocused else { return }
-        // Not being looked at → leave an unread marker on its tab, and post a
-        // system notification.
+        // Not being looked at → leave an unread marker on its tab (dismissed
+        // only by interacting with the tab's content, see `onInteraction`), and
+        // post a system notification.
         term.hasUnread = true
         NotificationManager.post(title: title, body: body, terminalID: term.id)
     }
-
-    /// Clears a tab's unread marker once the user is looking at it (selected it
-    /// or brought kterm forward while it was the visible tab).
-    private func markRead(_ term: Terminal?) { term?.hasUnread = false }
 
     /// Re-resolves `term`'s git branch from its current `pwd`, off the main
     /// thread. Guards against races (pwd changing again mid-lookup, or the

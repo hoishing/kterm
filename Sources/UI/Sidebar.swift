@@ -85,7 +85,9 @@ private struct SidebarRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if hasUnread && !isSelected {
+                // Persists even when the group is selected; cleared only by
+                // interacting with the content area (see `Terminal.hasUnread`).
+                if hasUnread {
                     UnreadDot()
                 }
             }
@@ -105,6 +107,8 @@ private struct SidebarRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: showsShortcutHint)
         .accessibilityIdentifier("sidebar.row")
-        .accessibilityValue(isSelected ? "selected" : (hasUnread ? "unread" : "unselected"))
+        // Unread takes precedence over selected: with dismiss-on-interaction, a
+        // group can be both selected and unread until the user interacts.
+        .accessibilityValue(hasUnread ? "unread" : (isSelected ? "selected" : "unselected"))
     }
 }
