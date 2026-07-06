@@ -24,6 +24,9 @@ final class SurfaceView: NSView, NSTextInputClient {
     var onNotification: ((_ title: String, _ body: String) -> Void)?
     /// Called when the shell rings the terminal bell (BEL / `\a`).
     var onBell: (() -> Void)?
+    /// Called on genuine user interaction with the surface (a keystroke or a
+    /// mouse press), used to dismiss the notification attention border.
+    var onInteraction: (() -> Void)?
 
     // IME / key-input state.
     private var markedText = NSMutableAttributedString()
@@ -139,6 +142,7 @@ final class SurfaceView: NSView, NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
+        onInteraction?()
 
         let action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
 
@@ -250,7 +254,10 @@ final class SurfaceView: NSView, NSTextInputClient {
 
     private func mouseButton(_ state: BtnState, _ btn: Btn, _ event: NSEvent) {
         guard let surface else { return }
-        if state == .press { window?.makeFirstResponder(self) }
+        if state == .press {
+            window?.makeFirstResponder(self)
+            onInteraction?()
+        }
         let cState: ghostty_input_mouse_state_e = state == .press ? GHOSTTY_MOUSE_PRESS : GHOSTTY_MOUSE_RELEASE
         let cBtn: ghostty_input_mouse_button_e = switch btn {
             case .left: GHOSTTY_MOUSE_LEFT

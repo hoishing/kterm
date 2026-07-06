@@ -77,7 +77,7 @@ struct RootView: View {
                 if let term = model.selectedGroup?.selectedTab {
                     SurfaceContainer(terminal: term)
                         .id(term.id)
-                        .overlay { AttentionRing(pulse: term.attentionPulse) }
+                        .overlay { AttentionBorder(active: term.showAttention) }
                 } else {
                     emptyState
                 }
@@ -245,6 +245,7 @@ struct SurfaceContainer: NSViewRepresentable {
         container.translatesAutoresizingMaskIntoConstraints = false
         container.setAccessibilityElement(true)
         container.setAccessibilityIdentifier("terminal.surface")
+        container.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
         attach(terminal.surfaceView, to: container)
         return container
     }
@@ -255,6 +256,11 @@ struct SurfaceContainer: NSViewRepresentable {
             surface.removeFromSuperview()
             attach(surface, to: container)
         }
+        // Mirror the attention-border state onto the container's accessibility
+        // value ("attention"/"idle") so UI tests can observe the notification
+        // border appear and clear. `RootView`'s body reads `showAttention` (via
+        // `AttentionBorder`), so a change re-runs this update.
+        container.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
         DispatchQueue.main.async {
             surface.window?.makeFirstResponder(surface)
         }
@@ -272,22 +278,19 @@ struct SurfaceContainer: NSViewRepresentable {
     }
 }
 
-/// Flashes an accent-colored ring around the content area when the on-screen
-/// terminal receives a notification, mirroring cmux's attention flash ring.
-/// Driven by `Terminal.attentionPulse`; a bump replays a quick fade in/out.
-private struct AttentionRing: View {
-    let pulse: Int
-    @State private var opacity: Double = 0
+/// A static accent-colored border around the content area, shown while the
+/// on-screen terminal has an unacknowledged notification. Unlike a flash it
+/// stays put; it's dismissed only when the user interacts with the content area
+/// (see `Terminal.showAttention`). A brief fade in/out keeps the appearance and
+/// dismissal smooth without pulsing.
+private struct AttentionBorder: View {
+    let active: Bool
 
     var body: some View {
         RoundedRectangle(cornerRadius: 6)
-            .stroke(Color.accentColor.opacity(opacity), lineWidth: 2.5)
+            .stroke(Color.accentColor.opacity(active ? 1 : 0), lineWidth: 2.5)
             .padding(1)
             .allowsHitTesting(false)
-            .onChange(of: pulse) { _, _ in
-                opacity = 0
-                withAnimation(.easeOut(duration: 0.15)) { opacity = 1 }
-                withAnimation(.easeIn(duration: 0.55).delay(0.2)) { opacity = 0 }
-            }
+            .animation(.easeInOut(duration: 0.15), value: active)
     }
 }

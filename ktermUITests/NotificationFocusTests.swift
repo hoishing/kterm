@@ -15,11 +15,15 @@ import XCTest
 ///     `AppModel.focusTerminal(withID:)` path the tap takes. Each tab exposes its
 ///     id to its shell as `KTERM_TAB_ID` (see `SurfaceView`), the id a
 ///     notification carries.
+///  4. **Content-area attention border** — a notification for the *visible*,
+///     frontmost tab (a build finishing while you watch its output) leaves no
+///     unread dot but draws a static border around the content area, cleared
+///     only when the user interacts with it (a keystroke or click).
 ///
 /// Unread state is asserted via each tab's `.accessibilityValue` ("unread" vs
-/// "selected"/"unselected"). The content-area attention flash (`AttentionRing`)
-/// is a transient opacity animation with no stable accessibility state, so it is
-/// not asserted here — it's covered by the build compiling and by manual check.
+/// "selected"/"unselected"). The attention border is asserted via the
+/// `terminal.surface` element's `.accessibilityValue` ("attention" vs "idle"),
+/// which `SurfaceContainer` mirrors from `Terminal.showAttention`.
 ///
 /// Each `printf '\a'` bell is armed behind `sleep 2` so it fires *after* we've
 /// switched away, reproducing the "you're looking at a different tab" state that
@@ -76,5 +80,22 @@ final class NotificationFocusTests: KtermUITestCase {
 
         // When the URL fires, focus jumps back to the issuing tab (group 0).
         waitForValue(row0, toEqual: "selected", timeout: 10)
+
+        // ── 4. Content-area attention border ────────────────────────────────
+        // Focus is back on the visible tab A. Arm a bell there but DON'T switch
+        // away, so the notification lands on the tab the user is looking at.
+        XCTAssertEqual(surface.value as? String, "idle", "border starts clear")
+        typeInTerminal("sleep 2 && printf '\\a'")
+
+        // Bell fires in the visible, frontmost tab → no unread dot (nothing to
+        // catch up on), just the static attention border. Don't touch the
+        // surface until we've seen it, or the interaction would clear it early.
+        waitForValue(surface, toEqual: "attention", timeout: 10)
+        XCTAssertEqual(row0.value as? String, "selected",
+                       "a notification for the visible tab leaves no unread dot")
+
+        // Interacting with the content area (a click) dismisses the border.
+        surface.click()
+        waitForValue(surface, toEqual: "idle")
     }
 }

@@ -21,10 +21,13 @@ final class Terminal: Identifiable {
     /// frontmost-visible; cleared when the tab is selected or regains focus.
     var hasUnread = false
 
-    /// Bumped whenever this terminal is the one on screen and a notification
-    /// arrives, driving the content-area attention flash (see `AttentionRing`).
-    private(set) var attentionPulse = 0
-    func pulseAttention() { attentionPulse &+= 1 }
+    /// True while this on-screen terminal has an unacknowledged notification,
+    /// drawing a static attention border around the content area (see
+    /// `AttentionBorder`). Set when a notification arrives for the visible tab;
+    /// cleared only when the user interacts with the content area — a keystroke
+    /// or click (see `SurfaceView.onInteraction`). Switching tabs or bringing
+    /// kterm forward does NOT clear it.
+    var showAttention = false
 
     /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
     ///   the new surface opens in that tab's working directory. `nil` for the
@@ -339,6 +342,12 @@ final class AppModel {
             guard let self, let term else { return }
             self.notify(from: term, title: "🔔", body: term.displayTitle)
         }
+        // A keystroke or click in the content area acknowledges the attention
+        // border and dismisses it.
+        term.surfaceView.onInteraction = { [weak term] in
+            guard let term, term.showAttention else { return }
+            term.showAttention = false
+        }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
             // Find which group holds it and close.
@@ -356,10 +365,11 @@ final class AppModel {
     /// notification focus this tab (see `focusTerminal(withID:)`).
     private func notify(from term: Terminal, title: String, body: String) {
         let isVisible = selectedGroup?.selectedTab?.id == term.id
-        // The terminal on screen just pinged → flash a ring around the content
-        // area, even when kterm is frontmost (e.g. a build finished while the
-        // user was reading its output).
-        if isVisible { term.pulseAttention() }
+        // The terminal on screen just pinged → show a static attention border
+        // around the content area, even when kterm is frontmost (e.g. a build
+        // finished while the user was reading its output). It stays until the
+        // user interacts with the content area (see `Terminal.showAttention`).
+        if isVisible { term.showAttention = true }
         let isFocused = NSApp.isActive && isVisible
         guard !isFocused else { return }
         // Not being looked at → leave an unread marker on its tab, and post a
