@@ -306,18 +306,26 @@ struct DockBounceProbe: NSViewRepresentable {
     }
 }
 
-/// A static accent-colored border around the content area, shown while the
-/// on-screen terminal has an unacknowledged notification. Unlike a flash it
-/// stays put; it's dismissed only when the user interacts with the content area
-/// (see `Terminal.showAttention`). A brief fade in/out keeps the appearance and
-/// dismissal smooth without pulsing.
+/// A static border around the content area, shown while the on-screen terminal
+/// has an unacknowledged notification. It stays put (unlike a flash); it's
+/// dismissed when the tab is acknowledged (see `Terminal.showAttention`). The
+/// look copies cmux's persistent notification ring
+/// (`WorkspaceAttentionCoordinator.notificationRingStyle` /
+/// `PanelOverlayRingMetrics`): a systemBlue stroke with a soft glow, inset from
+/// the edge. A brief fade in/out keeps the appearance and dismissal smooth
+/// without pulsing.
 private struct AttentionBorder: View {
     let active: Bool
 
+    /// cmux uses `NSColor.systemBlue` for the notification ring's stroke/glow.
+    private let ring = Color(nsColor: .systemBlue)
+
     var body: some View {
         RoundedRectangle(cornerRadius: 6)
-            .stroke(Color.accentColor.opacity(active ? 1 : 0), lineWidth: 2.5)
-            .padding(1)
+            .stroke(ring.opacity(active ? 1 : 0), lineWidth: 2.5)
+            // cmux `notificationRingStyle`: glowOpacity 0.35, glowRadius 3.
+            .shadow(color: ring.opacity(active ? 0.35 : 0), radius: 3)
+            .padding(2)  // cmux `PanelOverlayRingMetrics.inset`.
             .allowsHitTesting(false)
             .animation(.easeInOut(duration: 0.15), value: active)
     }

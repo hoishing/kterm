@@ -17,14 +17,15 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
   777 raises a macOS notification, so a bell-based cue (e.g. a CLI tool set to
   notify via the terminal bell) surfaces even when kterm is in the background
 - **In-app notification cues** — a ping marks its tab so you can spot it: a 🔔
-  on its horizontal tab, a dot on its sidebar group, and — if you were watching
-  that tab — a static border around the content area. All of them clear only
-  when you interact with that tab's content (a keystroke or click); merely
-  selecting the tab or switching back to kterm leaves them up
+  on its horizontal tab, a dot on its sidebar group, and — if it's the tab on
+  screen — a static border around the content area. They clear when you
+  acknowledge that tab: selecting it, switching kterm back to the foreground, or
+  interacting with its content (a keystroke or click)
 - **Dock bounce when unfocused** — a ping arriving while kterm isn't the active
   app bounces the dock icon
-- **Smart notification suppression** — the macOS notification and unread cues
-  fire only when you're not already looking at that exact tab
+- **Smart notification suppression** — the macOS notification and dock bounce
+  fire only when you're not already looking at that exact tab; the tab still
+  gets its in-app 🔔/border so you can catch up after
 - **Click-to-focus notifications** — clicking a desktop notification brings
   kterm forward and focuses the exact tab that raised it (restoring the window
   if minimized)

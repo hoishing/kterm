@@ -17,20 +17,20 @@ final class Terminal: Identifiable {
     let surfaceView: SurfaceView
 
     /// Has an unread notification/bell that the user hasn't acknowledged yet.
-    /// Set when a bell or OSC 9/777 notification arrives for a tab that isn't
-    /// frontmost-visible; drives the sidebar row's dot and the horizontal tab's
-    /// 🔔. Cleared only when the user interacts with the tab's content area — a
-    /// keystroke or click — together with `showAttention` (see
-    /// `SurfaceView.onInteraction`). Selecting the tab or bringing kterm forward
-    /// does NOT clear it.
+    /// Set whenever a bell or OSC 9/777 notification arrives for this tab —
+    /// even while it's frontmost-visible, mirroring cmux; drives the sidebar
+    /// row's dot and the horizontal tab's 🔔. Cleared, together with
+    /// `showAttention`, when the tab is selected, when kterm returns to the
+    /// foreground, or when the user interacts with its content area — a
+    /// keystroke or click (see `AppModel.acknowledge`).
     var hasUnread = false
 
     /// True while this on-screen terminal has an unacknowledged notification,
     /// drawing a static attention border around the content area (see
     /// `AttentionBorder`). Set when a notification arrives for the visible tab;
-    /// cleared only when the user interacts with the content area — a keystroke
-    /// or click (see `SurfaceView.onInteraction`). Switching tabs or bringing
-    /// kterm forward does NOT clear it.
+    /// cleared, together with `hasUnread`, when the tab is selected, when kterm
+    /// returns to the foreground, or on content interaction (see
+    /// `AppModel.acknowledge`).
     var showAttention = false
 
     /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
@@ -160,6 +160,9 @@ final class AppModel {
         ) { _ in
             Task { @MainActor [weak self] in
                 guard let self, let term = self.selectedGroup?.selectedTab else { return }
+                // cmux marks the selected tab's notification read when kterm
+                // returns to the foreground — acknowledge it here too.
+                self.acknowledge(term)
                 self.refreshBranch(for: term)
             }
         }
@@ -210,6 +213,7 @@ final class AppModel {
         selectedGroupID = group.id
         focusSelected()
         if let term = group.selectedTab {
+            acknowledge(term)
             refreshBranch(for: term)
         }
     }
@@ -302,6 +306,7 @@ final class AppModel {
         selectedGroupID = group.id
         group.selectedTabID = tab.id
         focusSelected()
+        acknowledge(tab)
         refreshBranch(for: tab)
     }
 
@@ -349,11 +354,10 @@ final class AppModel {
         }
         // A keystroke or click in the content area acknowledges the tab's
         // notification: the attention border and the unread marker (sidebar dot
-        // / horizontal-tab 🔔) dismiss together.
-        term.surfaceView.onInteraction = { [weak term] in
-            guard let term, term.showAttention || term.hasUnread else { return }
-            term.showAttention = false
-            term.hasUnread = false
+        // / horizontal-tab 🔔) dismiss together (see `acknowledge`).
+        term.surfaceView.onInteraction = { [weak self, weak term] in
+            guard let self, let term else { return }
+            self.acknowledge(term)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
@@ -366,23 +370,26 @@ final class AppModel {
         return term
     }
 
-    /// Posts a system notification for `term`, unless the user is already
-    /// looking at it — kterm frontmost AND this exact tab visible — in which
-    /// case there's nothing to be told. The `terminalID` lets a tap on the
-    /// notification focus this tab (see `focusTerminal(withID:)`).
+    /// Records `term` as unread and posts a system notification. Mirroring
+    /// cmux, the unread state is *always* recorded — the tab marker (🔔 /
+    /// sidebar dot) and, for the on-screen tab, the content-area attention
+    /// border show even while kterm is frontmost and this tab is focused. Only
+    /// the OS banner and the dock bounce are suppressed when the user is already
+    /// looking at this exact tab (kterm frontmost AND this tab visible). The
+    /// `terminalID` lets a tap on the notification focus this tab (see
+    /// `focusTerminal(withID:)`).
     private func notify(from term: Terminal, title: String, body: String) {
         let isVisible = selectedGroup?.selectedTab?.id == term.id
         // The terminal on screen just pinged → show a static attention border
         // around the content area, even when kterm is frontmost (e.g. a build
-        // finished while the user was reading its output). It stays until the
-        // user interacts with the content area (see `Terminal.showAttention`).
+        // finished while the user was reading its output). Leave an unread
+        // marker on its tab too. Both stay until acknowledged (see `acknowledge`).
         if isVisible { term.showAttention = true }
+        term.hasUnread = true
+        // Suppress only the external cues when the user is already looking at
+        // this exact tab: no OS banner, no dock bounce.
         let isFocused = NSApp.isActive && isVisible
         guard !isFocused else { return }
-        // Not being looked at → leave an unread marker on its tab (dismissed
-        // only by interacting with the tab's content, see `onInteraction`), and
-        // post a system notification.
-        term.hasUnread = true
         NotificationManager.post(title: title, body: body, terminalID: term.id)
         // Bounce the dock icon when kterm isn't the active app, so a background
         // ping is noticeable (mirrors ghostty's `requestUserAttention`).
@@ -390,6 +397,18 @@ final class AppModel {
             NSApp.requestUserAttention(.informationalRequest)
             dockAttentionRequests += 1
         }
+    }
+
+    /// Acknowledge `term`'s notification: clear the content-area attention
+    /// border and the tab's unread marker (🔔 / sidebar dot) together.
+    /// Mirroring cmux, a notification is marked read when its tab is selected,
+    /// when kterm returns to the foreground, or on direct content interaction —
+    /// not only on a keystroke/click. The guard avoids redundant Observation
+    /// invalidations when there's nothing to clear.
+    private func acknowledge(_ term: Terminal) {
+        guard term.showAttention || term.hasUnread else { return }
+        term.showAttention = false
+        term.hasUnread = false
     }
 
     /// Re-resolves `term`'s git branch from its current `pwd`, off the main
