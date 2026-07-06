@@ -10,6 +10,9 @@
 - "build the app" means: Release build for arm64 only (`ARCHS=arm64`;
   GhosttyKit.xcframework has no x86_64), then copy the product over
   `/Applications/kterm.app` (fixed path keeps its Full Disk Access grant)
+- "publish the app" means: build the app, update e2e tests, README.md and this
+  CLAUDE.md if necessary, commit, push, then run e2e (`./scripts/run-e2e.sh`) if
+  the e2e tests were updated
 
 ## e2e tests
 
