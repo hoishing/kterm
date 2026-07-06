@@ -102,6 +102,11 @@ final class AppModel {
     /// Whether the vertical tab sidebar is shown (⌘B toggles it).
     var sidebarVisible = true
 
+    /// Count of dock-icon attention requests made (see `notify`). Exposed only
+    /// so UI tests can observe that a background ping bounced the dock — the
+    /// bounce itself has no accessibility surface (see `DockBounceProbe`).
+    private(set) var dockAttentionRequests = 0
+
     let ghostty: GhosttyApp
 
     /// Where a new tab lands relative to the current one (`kterm-new-tab-position`).
@@ -379,6 +384,12 @@ final class AppModel {
         // post a system notification.
         term.hasUnread = true
         NotificationManager.post(title: title, body: body, terminalID: term.id)
+        // Bounce the dock icon when kterm isn't the active app, so a background
+        // ping is noticeable (mirrors ghostty's `requestUserAttention`).
+        if !NSApp.isActive {
+            NSApp.requestUserAttention(.informationalRequest)
+            dockAttentionRequests += 1
+        }
     }
 
     /// Re-resolves `term`'s git branch from its current `pwd`, off the main

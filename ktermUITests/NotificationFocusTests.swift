@@ -22,6 +22,11 @@ import XCTest
 ///     unread marker but draws a static border around the content area. The
 ///     border and any unread marker share one dismiss trigger: interacting with
 ///     the content area.
+///  5. **Dock bounce when unfocused** — a notification arriving while kterm is
+///     not the active app bounces the dock icon (ghostty's `requestUserAttention`
+///     path). The bounce has no accessibility surface, so it's observed via the
+///     `app.dockBounces` probe (`AppModel.dockAttentionRequests`); it must stay
+///     0 while kterm is frontmost and tick up once a ping lands while hidden.
 ///
 /// Unread state is asserted via each tab's `.accessibilityValue`, where "unread"
 /// takes precedence over "selected"/"unselected" (a tab stays unread even while
@@ -114,5 +119,23 @@ final class NotificationFocusTests: KtermUITestCase {
         // Interacting with the content area (a click) dismisses the border.
         surface.click()
         waitForValue(surface, toEqual: "idle")
+
+        // ── 5. Dock bounce when kterm is unfocused ──────────────────────────
+        // Every ping so far arrived while kterm was frontmost, so none bounced.
+        let dockBounces = app.otherElements["app.dockBounces"]
+        XCTAssertEqual(dockBounces.value as? String, "0",
+                       "pings while kterm is frontmost must not bounce the dock")
+
+        // Arm a bell, then hide kterm (⌘H resigns active) before it fires so the
+        // ping lands while kterm is not the active app.
+        typeInTerminal("sleep 2 && printf '\\a'")
+        app.typeKey("h", modifierFlags: .command)
+        // Let the bell fire while hidden (armed behind `sleep 2`); don't
+        // reactivate first, or kterm would be active again when it fires.
+        Thread.sleep(forTimeInterval: 3)
+
+        // Bring kterm back and confirm the ping bounced the dock exactly once.
+        app.activate()
+        waitForValue(dockBounces, toEqual: "1", timeout: 10)
     }
 }

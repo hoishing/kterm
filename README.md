@@ -13,11 +13,18 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
   `cd`/`git checkout` and when the window regains focus
 - **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
   shortcut
-- **Terminal bell notifications** — a terminal bell (BEL / `\a`) raises a macOS
-  notification, so a bell-based cue (e.g. a CLI tool set to notify via the
-  terminal bell) surfaces even when kterm is in the background
-- **Smart notification suppression** — bell/OSC 9/OSC 777 notifications fire
-  only when you're not already looking at that exact tab
+- **Terminal bell notifications** — a terminal bell (BEL / `\a`) or OSC 9/OSC
+  777 raises a macOS notification, so a bell-based cue (e.g. a CLI tool set to
+  notify via the terminal bell) surfaces even when kterm is in the background
+- **In-app notification cues** — a ping marks its tab so you can spot it: a 🔔
+  on its horizontal tab, a dot on its sidebar group, and — if you were watching
+  that tab — a static border around the content area. All of them clear only
+  when you interact with that tab's content (a keystroke or click); merely
+  selecting the tab or switching back to kterm leaves them up
+- **Dock bounce when unfocused** — a ping arriving while kterm isn't the active
+  app bounces the dock icon
+- **Smart notification suppression** — the macOS notification and unread cues
+  fire only when you're not already looking at that exact tab
 - **Click-to-focus notifications** — clicking a desktop notification brings
   kterm forward and focuses the exact tab that raised it (restoring the window
   if minimized)

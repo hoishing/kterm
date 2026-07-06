@@ -87,6 +87,9 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator(model: model))
         .overlay(alignment: .bottomTrailing) { uiTestDragSource }
+        .overlay(alignment: .topLeading) {
+            DockBounceProbe(count: model.dockAttentionRequests).frame(width: 1, height: 1)
+        }
     }
 
     /// A UI-test-only drag source overlaid on the terminal corner, present only
@@ -275,6 +278,31 @@ struct SurfaceContainer: NSViewRepresentable {
             surface.topAnchor.constraint(equalTo: container.topAnchor),
             surface.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+    }
+}
+
+/// A tiny, click-transparent AppKit accessibility element whose value is the
+/// running count of dock-icon attention requests (`AppModel.dockAttentionRequests`).
+/// The dock bounce itself isn't observable from XCUITest, so this lets a UI test
+/// confirm a background ping bounced the dock. `hitTest` returns nil so it never
+/// steals mouse events; only its accessibility value is ever read.
+struct DockBounceProbe: NSViewRepresentable {
+    let count: Int
+
+    final class ProbeView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ProbeView()
+        view.setAccessibilityElement(true)
+        view.setAccessibilityIdentifier("app.dockBounces")
+        view.setAccessibilityValue(String(count))
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.setAccessibilityValue(String(count))
     }
 }
 
