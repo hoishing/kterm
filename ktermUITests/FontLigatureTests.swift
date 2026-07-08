@@ -4,7 +4,8 @@ import XCTest
 /// takes effect. The terminal is rendered by libghostty as one opaque surface,
 /// so individual ligature glyphs aren't reachable through the accessibility
 /// tree; instead the app (when launched with `KTERM_UITEST_CONFIG`) exposes the
-/// parsed setting via a hidden `config.fontLigatures` probe (see `RootView`).
+/// parsed setting via a hidden probe whose identifier is `config.fontLigatures.on`
+/// or `config.fontLigatures.off` (see `RootView`).
 final class FontLigatureTests: KtermUITestCase {
     private var configPath = ""
 
@@ -23,20 +24,17 @@ final class FontLigatureTests: KtermUITestCase {
     func testLigaturesOffByDefault() throws {
         // An empty config: the toggle is absent, so ligatures default to off.
         launch(config: "")
-        XCTAssertEqual(ligatureProbe.value as? String, "off",
-                       "ligatures should be off when the toggle is unset")
+        assertLigatures(on: false)
     }
 
     func testLigaturesEnabledWhenToggledOn() throws {
         launch(config: "kterm-font-ligatures = true\n")
-        XCTAssertEqual(ligatureProbe.value as? String, "on",
-                       "kterm-font-ligatures = true should enable ligatures")
+        assertLigatures(on: true)
     }
 
     func testLigaturesStayOffWhenToggledOff() throws {
         launch(config: "kterm-font-ligatures = false\n")
-        XCTAssertEqual(ligatureProbe.value as? String, "off",
-                       "kterm-font-ligatures = false should keep ligatures off")
+        assertLigatures(on: false)
     }
 
     /// Writes `config` to the injected path and launches the app against it.
@@ -48,10 +46,17 @@ final class FontLigatureTests: KtermUITestCase {
         waitForShellReady()
     }
 
-    private var ligatureProbe: XCUIElement {
-        let probe = app.descendants(matching: .any)
-            .matching(identifier: "config.fontLigatures").firstMatch
-        XCTAssertTrue(probe.waitForExistence(timeout: 5), "ligature probe never appeared")
-        return probe
+    /// Asserts the probe for the expected ligature state exists (and its
+    /// opposite doesn't).
+    private func assertLigatures(on: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let expected = probe(on ? "on" : "off")
+        XCTAssertTrue(expected.waitForExistence(timeout: 5),
+                      "expected ligatures \(on ? "on" : "off")", file: file, line: line)
+        XCTAssertFalse(probe(on ? "off" : "on").exists,
+                       "opposite ligature probe should be absent", file: file, line: line)
+    }
+
+    private func probe(_ state: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "config.fontLigatures.\(state)").firstMatch
     }
 }

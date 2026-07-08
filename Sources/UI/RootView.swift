@@ -101,11 +101,14 @@ struct RootView: View {
     @ViewBuilder private var uiTestLigatureProbe: some View {
         #if DEBUG
         if ProcessInfo.processInfo.environment["KTERM_UITEST_CONFIG"] != nil {
+            // The state is encoded in the identifier (`.on`/`.off`) rather than
+            // an accessibility value: XCUITest doesn't surface `.value` for a
+            // plain non-control probe element, but it does surface identifiers.
+            let state = KtermConfig.load().fontLigatures ? "on" : "off"
             Color.clear
                 .frame(width: 1, height: 1)
                 .accessibilityElement()
-                .accessibilityIdentifier("config.fontLigatures")
-                .accessibilityValue(KtermConfig.load().fontLigatures ? "on" : "off")
+                .accessibilityIdentifier("config.fontLigatures.\(state)")
         }
         #endif
     }
