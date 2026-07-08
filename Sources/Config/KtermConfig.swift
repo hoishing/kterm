@@ -23,6 +23,11 @@ struct KtermConfig {
     /// Placement of new ⌘N/⌘T tabs. `kterm-new-tab-position`.
     var newTabPosition: NewTabPosition = .afterCurrent
 
+    /// Programming ligatures. Off by default; `kterm-font-ligatures = true`
+    /// re-enables them. Disabling maps to libghostty's `font-feature` (the
+    /// `-calt, -liga, -dlig` idiom Ghostty documents for turning ligatures off).
+    var fontLigatures: Bool = false
+
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
 
@@ -33,7 +38,18 @@ struct KtermConfig {
         "macos-option-as-alt = left",
     ]
 
+    /// Ghostty `font-feature` line that turns programming ligatures off, per
+    /// Ghostty's own docs. Appended (so it wins over any user `font-feature`)
+    /// unless `kterm-font-ligatures = true`.
+    private static let disableLigaturesLine = "font-feature = -calt, -liga, -dlig"
+
     static var path: URL {
+        #if DEBUG
+        // Let UI tests inject a throwaway config file (see `FontLigatureTests`).
+        if let override = ProcessInfo.processInfo.environment["KTERM_UITEST_CONFIG"] {
+            return URL(fileURLWithPath: override)
+        }
+        #endif
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/kterm/config")
     }
@@ -41,23 +57,28 @@ struct KtermConfig {
     static func load() -> KtermConfig {
         var config = KtermConfig()
         config.ghosttyLines = builtinDefaults
-        guard let text = try? String(contentsOf: path, encoding: .utf8) else { return config }
 
-        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty || line.hasPrefix("#") { continue }
+        if let text = try? String(contentsOf: path, encoding: .utf8) {
+            for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+                let line = rawLine.trimmingCharacters(in: .whitespaces)
+                if line.isEmpty || line.hasPrefix("#") { continue }
 
-            let parts = line.split(separator: "=", maxSplits: 1).map {
-                $0.trimmingCharacters(in: .whitespaces)
+                let parts = line.split(separator: "=", maxSplits: 1).map {
+                    $0.trimmingCharacters(in: .whitespaces)
+                }
+                let key = parts.first ?? ""
+
+                if key.hasPrefix("kterm-") {
+                    let value = parts.count > 1 ? parts[1] : ""
+                    config.apply(ktermKey: key, value: value)
+                } else {
+                    config.ghosttyLines.append(line)
+                }
             }
-            let key = parts.first ?? ""
+        }
 
-            if key.hasPrefix("kterm-") {
-                let value = parts.count > 1 ? parts[1] : ""
-                config.apply(ktermKey: key, value: value)
-            } else {
-                config.ghosttyLines.append(line)
-            }
+        if !config.fontLigatures {
+            config.ghosttyLines.append(disableLigaturesLine)
         }
         return config
     }
@@ -68,8 +89,19 @@ struct KtermConfig {
             if let w = Double(value), w > 0 { sidebarWidth = CGFloat(w) }
         case "kterm-new-tab-position":
             if let p = NewTabPosition(rawValue: value) { newTabPosition = p }
+        case "kterm-font-ligatures":
+            if let b = Self.parseBool(value) { fontLigatures = b }
         default:
             break // unknown kterm- key: ignore
+        }
+    }
+
+    /// Parse a libghostty-style boolean (`true`/`false`, `yes`/`no`, `1`/`0`).
+    private static func parseBool(_ value: String) -> Bool? {
+        switch value.lowercased() {
+        case "true", "yes", "1": return true
+        case "false", "no", "0": return false
+        default: return nil
         }
     }
 

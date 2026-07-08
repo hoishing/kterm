@@ -9,6 +9,8 @@
 kterm-sidebar-width = 160
 # Where a new ⌘N/⌘T tab lands: after-current (default) or end
 kterm-new-tab-position = after-current
+# Programming ligatures are off by default; set to true to enable them
+kterm-font-ligatures = false
 
 # --- terminal (libghostty) ---
 font-family = JetBrains Mono

@@ -87,9 +87,27 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator(model: model))
         .overlay(alignment: .bottomTrailing) { uiTestDragSource }
+        .overlay(alignment: .topTrailing) { uiTestLigatureProbe }
         .overlay(alignment: .topLeading) {
             DockBounceProbe(count: model.dockAttentionRequests).frame(width: 1, height: 1)
         }
+    }
+
+    /// A UI-test-only probe exposing the effective `kterm-font-ligatures` value,
+    /// present only when launched with `KTERM_UITEST_CONFIG`. libghostty renders
+    /// the terminal as one opaque surface, so the toggle's effect on glyphs isn't
+    /// reachable through the accessibility tree; this surfaces the parsed setting
+    /// instead (see `FontLigatureTests`). Compiled out of release builds.
+    @ViewBuilder private var uiTestLigatureProbe: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["KTERM_UITEST_CONFIG"] != nil {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("config.fontLigatures")
+                .accessibilityValue(KtermConfig.load().fontLigatures ? "on" : "off")
+        }
+        #endif
     }
 
     /// A UI-test-only drag source overlaid on the terminal corner, present only

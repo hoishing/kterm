@@ -73,6 +73,7 @@ Baked-in defaults (override by setting the same key in your config):
 | --- | --- | --- |
 | `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
 | `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
+| `kterm-font-ligatures` | `false` | Programming ligatures. Off by default; set `true` to enable. Disabling maps to Ghostty's `font-feature = -calt, -liga, -dlig` |
 
 New tabs inherit the working directory of the tab they were opened from
 (honouring libghostty's `window-inherit-working-directory`).
