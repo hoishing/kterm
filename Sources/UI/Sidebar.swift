@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Vertical tab column. Each row is a group (⌘N adds one).
+/// Vertical tab column. Each row is a terminal (⌘T adds one).
 struct Sidebar: View {
     @Bindable var model: AppModel
 
@@ -11,16 +11,16 @@ struct Sidebar: View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(model.groups.enumerated()), id: \.element.id) { index, group in
+                    ForEach(Array(model.tabs.enumerated()), id: \.element.id) { index, tab in
                         SidebarRow(
-                            title: group.displayTitle,
-                            branch: group.branch,
-                            isSelected: group.id == model.selectedGroup?.id,
-                            hasUnread: group.hasUnread,
-                            // Only the first 9 groups have a ⌘-digit shortcut.
+                            title: tab.displayTitle,
+                            branch: tab.branch,
+                            isSelected: tab.id == model.selectedTab?.id,
+                            hasUnread: tab.hasUnread,
+                            // Only the first 9 tabs have a ⌘-digit shortcut.
                             shortcutNumber: index < 9 ? index + 1 : nil,
                             showsShortcutHint: cmdHold.isShowing,
-                            select: { model.select(group: group) }
+                            select: { model.select(tab) }
                         )
                     }
                 }
@@ -29,14 +29,14 @@ struct Sidebar: View {
 
             Divider()
 
-            Button(action: { model.newVerticalTab() }) {
+            Button(action: { model.newTab() }) {
                 Label("New Tab", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
-            .help("New vertical tab (⌘N)")
+            .help("New tab (⌘T)")
             .accessibilityIdentifier("sidebar.newTab")
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -55,7 +55,7 @@ private struct SidebarRow: View {
     /// Git branch of the tab's folder, if any — shown under the title.
     let branch: String?
     let isSelected: Bool
-    /// Any tab in this group has an unread notification → show a dot.
+    /// This tab has an unread notification → show a dot.
     let hasUnread: Bool
     /// This row's ⌘-digit shortcut (1–9), or `nil` past the 9th tab.
     let shortcutNumber: Int?
@@ -85,7 +85,7 @@ private struct SidebarRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                // Persists even when the group is selected; cleared only by
+                // Persists even when the tab is selected; cleared only by
                 // interacting with the content area (see `Terminal.hasUnread`).
                 if hasUnread {
                     UnreadDot()
@@ -108,7 +108,25 @@ private struct SidebarRow: View {
         .animation(.easeOut(duration: 0.12), value: showsShortcutHint)
         .accessibilityIdentifier("sidebar.row")
         // Unread takes precedence over selected: with dismiss-on-interaction, a
-        // group can be both selected and unread until the user interacts.
+        // tab can be both selected and unread until the user interacts.
         .accessibilityValue(hasUnread ? "unread" : (isSelected ? "selected" : "unselected"))
+    }
+}
+
+/// Active/hover fill color for sidebar rows: light grey when active.
+enum TabHighlight {
+    static func fill(isSelected: Bool, hovering: Bool) -> Color {
+        if isSelected { return Color.white.opacity(0.16) }
+        if hovering { return Color.white.opacity(0.07) }
+        return Color.clear
+    }
+}
+
+/// A small accent dot marking an unread notification on a sidebar row.
+struct UnreadDot: View {
+    var body: some View {
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 7, height: 7)
     }
 }

@@ -20,7 +20,7 @@ struct KtermConfig {
     /// Width of the vertical (sidebar) tab column, in points. `kterm-sidebar-width`.
     var sidebarWidth: CGFloat = 160
 
-    /// Placement of new ⌘N/⌘T tabs. `kterm-new-tab-position`.
+    /// Placement of new ⌘T tabs. `kterm-new-tab-position`.
     var newTabPosition: NewTabPosition = .afterCurrent
 
     /// Programming ligatures. Off by default; `kterm-font-ligatures = true`

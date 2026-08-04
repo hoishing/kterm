@@ -19,10 +19,10 @@ final class Terminal: Identifiable {
     /// Has an unread notification/bell that the user hasn't acknowledged yet.
     /// Set whenever a bell or OSC 9/777 notification arrives for this tab —
     /// even while it's frontmost-visible, mirroring cmux; drives the sidebar
-    /// row's dot and the horizontal tab's 🔔. Cleared, together with
-    /// `showAttention`, when the tab is selected, when kterm returns to the
-    /// foreground, or when the user interacts with its content area — a
-    /// keystroke or click (see `AppModel.acknowledge`).
+    /// row's unread dot. Cleared, together with `showAttention`, when the tab
+    /// is selected, when kterm returns to the foreground, or when the user
+    /// interacts with its content area — a keystroke or click (see
+    /// `AppModel.acknowledge`).
     var hasUnread = false
 
     /// True while this on-screen terminal has an unacknowledged notification,
@@ -33,7 +33,7 @@ final class Terminal: Identifiable {
     /// `AppModel.acknowledge`).
     var showAttention = false
 
-    /// - Parameter inheritFrom: the terminal whose ⌘N/⌘T spawned this one, so
+    /// - Parameter inheritFrom: the terminal whose ⌘T spawned this one, so
     ///   the new surface opens in that tab's working directory. `nil` for the
     ///   very first tab.
     /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
@@ -47,7 +47,7 @@ final class Terminal: Identifiable {
             workingDirectory: workingDirectory)
     }
 
-    /// A label for the tab strip: the working directory path relative to
+    /// A label for the sidebar: the working directory path relative to
     /// home (`~/...`), or the full path if outside home, falling back to
     /// the title, then "Terminal". Views truncate this from the front
     /// (`.truncationMode(.head)`) so the trailing folder always stays visible.
@@ -67,37 +67,12 @@ final class Terminal: Identifiable {
     }
 }
 
-/// A vertical (sidebar) tab: a named group of horizontal terminal tabs.
-@Observable
-@MainActor
-final class TabGroup: Identifiable {
-    let id = UUID()
-    var tabs: [Terminal] = []
-    var selectedTabID: UUID?
-
-    var selectedTab: Terminal? {
-        tabs.first { $0.id == selectedTabID } ?? tabs.first
-    }
-
-    /// Group title mirrors the active terminal.
-    var displayTitle: String { selectedTab?.displayTitle ?? "Terminal" }
-
-    /// Git branch shown under the folder title in the sidebar, mirroring the
-    /// active terminal's `pwd`.
-    var branch: String? { selectedTab?.branch }
-
-    /// Any horizontal tab in this group has an unread notification → the sidebar
-    /// row shows an unread dot.
-    var hasUnread: Bool { tabs.contains { $0.hasUnread } }
-}
-
-/// The whole window state: a list of vertical tabs (groups), each containing
-/// horizontal tabs (terminals). No splits — just two levels of tabs.
+/// The whole window state: a flat list of vertical tabs (terminals).
 @Observable
 @MainActor
 final class AppModel {
-    var groups: [TabGroup] = []
-    var selectedGroupID: UUID?
+    var tabs: [Terminal] = []
+    var selectedTabID: UUID?
 
     /// Whether the vertical tab sidebar is shown (⌘B toggles it).
     var sidebarVisible = true
@@ -136,8 +111,8 @@ final class AppModel {
     /// launch still get its first window (see `openDirectory`).
     static var openNewWindow: (() -> Void)?
 
-    var selectedGroup: TabGroup? {
-        groups.first { $0.id == selectedGroupID } ?? groups.first
+    var selectedTab: Terminal? {
+        tabs.first { $0.id == selectedTabID } ?? tabs.first
     }
 
     init(ghostty: GhosttyApp, newTabPosition: KtermConfig.NewTabPosition = .afterCurrent) {
@@ -145,12 +120,12 @@ final class AppModel {
         self.newTabPosition = newTabPosition
         Self.registry.removeAll { $0.model == nil }
         Self.registry.append(Box(self))
-        // Start with one vertical tab containing one terminal. On a cold launch
-        // via `open -a kterm <dir>` the requested folder may already be waiting;
-        // consume it so the very first tab opens there.
+        // Start with one terminal. On a cold launch via `open -a kterm <dir>`
+        // the requested folder may already be waiting; consume it so the very
+        // first tab opens there.
         let pending = Self.pendingOpenDirectory
         Self.pendingOpenDirectory = nil
-        newVerticalTab(workingDirectory: pending)
+        newTab(workingDirectory: pending)
 
         // Re-check the selected tab's branch when kterm regains focus, so an
         // in-shell `git checkout` made while another app was frontmost shows
@@ -159,7 +134,7 @@ final class AppModel {
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { _ in
             Task { @MainActor [weak self] in
-                guard let self, let term = self.selectedGroup?.selectedTab else { return }
+                guard let self, let term = self.selectedTab else { return }
                 // cmux marks the selected tab's notification read when kterm
                 // returns to the foreground — acknowledge it here too.
                 self.acknowledge(term)
@@ -168,28 +143,14 @@ final class AppModel {
         }
     }
 
-    /// ⌘N — new vertical tab (a fresh group with one terminal), selected. It
-    /// opens in the current tab's working directory (see `Terminal.init`), or in
-    /// `workingDirectory` when one is given (e.g. `open -a kterm <dir>`).
-    func newVerticalTab(workingDirectory: String? = nil) {
+    /// ⌘T — new tab, selected. It opens in the current tab's working directory
+    /// (see `Terminal.init`), or in `workingDirectory` when one is given
+    /// (e.g. `open -a kterm <dir>`).
+    func newTab(workingDirectory: String? = nil) {
         guard ghostty.app != nil else { return }
-        let group = TabGroup()
-        let term = makeTerminal(inheritFrom: selectedGroup?.selectedTab,
-                                workingDirectory: workingDirectory)
-        group.tabs.append(term)
-        group.selectedTabID = term.id
-        groups.insert(group, at: insertionIndex(in: groups, after: selectedGroupID))
-        selectedGroupID = group.id
-    }
-
-    /// ⌘T — new horizontal tab (a terminal in the current group), selected. It
-    /// opens in the current tab's working directory (see `Terminal.init`).
-    func newHorizontalTab() {
-        guard ghostty.app != nil else { return }
-        guard let group = selectedGroup else { newVerticalTab(); return }
-        let term = makeTerminal(inheritFrom: group.selectedTab)
-        group.tabs.insert(term, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
-        group.selectedTabID = term.id
+        let term = makeTerminal(inheritFrom: selectedTab, workingDirectory: workingDirectory)
+        tabs.insert(term, at: insertionIndex(in: tabs, after: selectedTabID))
+        selectedTabID = term.id
     }
 
     /// The slot a freshly spawned sibling should occupy. With
@@ -202,50 +163,28 @@ final class AppModel {
         return idx + 1
     }
 
-    /// ⌘W — close the active horizontal tab. If the group empties, drop it; if
-    /// the last group goes, close the window.
+    /// ⌘W — close the active tab. If the last tab goes, close the window.
     func closeActiveTab() {
-        guard let group = selectedGroup, let term = group.selectedTab else { return }
-        close(term, in: group)
+        guard let term = selectedTab else { return }
+        close(term)
     }
 
-    func select(group: TabGroup) {
-        selectedGroupID = group.id
-        focusSelected()
-        if let term = group.selectedTab {
-            acknowledge(term)
-            refreshBranch(for: term)
-        }
+    /// ⌘1…⌘9 — select the tab at `index`, if it exists.
+    func selectTab(at index: Int) {
+        guard index >= 0, index < tabs.count else { return }
+        select(tabs[index])
     }
 
-    /// ⌘1…⌘9 — select the vertical tab (group) at `index`, if it exists.
-    func selectGroup(at index: Int) {
-        guard index >= 0, index < groups.count else { return }
-        select(group: groups[index])
-    }
+    /// ⌘⇧] / ⌘⇧[ — cycle tabs (wrapping).
+    func selectNextTab() { cycle(+1) }
+    func selectPrevTab() { cycle(-1) }
 
-    /// ⌘⇧] / ⌘⇧[ — cycle horizontal tabs within the selected group (wrapping).
-    func selectNextHorizontalTab() { cycleHorizontal(+1) }
-    func selectPrevHorizontalTab() { cycleHorizontal(-1) }
-
-    private func cycleHorizontal(_ delta: Int) {
-        guard let group = selectedGroup, !group.tabs.isEmpty,
-              let cur = group.tabs.firstIndex(where: { $0.id == group.selectedTab?.id })
+    private func cycle(_ delta: Int) {
+        guard !tabs.isEmpty,
+              let cur = tabs.firstIndex(where: { $0.id == selectedTab?.id })
         else { return }
-        let next = (cur + delta + group.tabs.count) % group.tabs.count
-        select(tab: group.tabs[next], in: group)
-    }
-
-    /// ⌘⌃] / ⌘⌃[ — cycle vertical tabs (groups) (wrapping).
-    func selectNextVerticalTab() { cycleVertical(+1) }
-    func selectPrevVerticalTab() { cycleVertical(-1) }
-
-    private func cycleVertical(_ delta: Int) {
-        guard !groups.isEmpty,
-              let cur = groups.firstIndex(where: { $0.id == selectedGroup?.id })
-        else { return }
-        let next = (cur + delta + groups.count) % groups.count
-        select(group: groups[next])
+        let next = (cur + delta + tabs.count) % tabs.count
+        select(tabs[next])
     }
 
     /// ⌘` — cycle key focus through kterm's windows (wrapping). No-op with
@@ -261,7 +200,7 @@ final class AppModel {
         next.focusSelected()
     }
 
-    /// Open `path` as a new vertical tab in the front kterm window, bringing the
+    /// Open `path` as a new tab in the front kterm window, bringing the
     /// app forward. Used for a folder passed to `open -a kterm <dir>` (or dropped
     /// on the app icon / Finder "Open With"). If no window exists yet — a cold
     /// launch racing ahead of window creation — the path is stashed so the first
@@ -277,7 +216,7 @@ final class AppModel {
         }
         NSApp.activate(ignoringOtherApps: true)
         model.window?.makeKeyAndOrderFront(nil)
-        model.newVerticalTab(workingDirectory: path)
+        model.newTab(workingDirectory: path)
     }
 
     /// Route a notification tap (or `kterm://focus-tab` URL) to whichever
@@ -290,44 +229,31 @@ final class AppModel {
     /// notification, restoring the window if it was minimized. No-op if the
     /// tab has since closed.
     func focusTerminal(withID id: UUID) {
-        for group in groups {
-            guard let tab = group.tabs.first(where: { $0.id == id }) else { continue }
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = tab.surfaceView.window {
-                if window.isMiniaturized { window.deminiaturize(nil) }
-                window.makeKeyAndOrderFront(nil)
-            }
-            select(tab: tab, in: group)
-            return
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = tab.surfaceView.window {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
         }
+        select(tab)
     }
 
-    func select(tab: Terminal, in group: TabGroup) {
-        selectedGroupID = group.id
-        group.selectedTabID = tab.id
+    func select(_ tab: Terminal) {
+        selectedTabID = tab.id
         focusSelected()
         acknowledge(tab)
         refreshBranch(for: tab)
     }
 
-    func close(_ term: Terminal, in group: TabGroup) {
-        guard let idx = group.tabs.firstIndex(where: { $0.id == term.id }) else { return }
-        group.tabs.remove(at: idx)
+    func close(_ term: Terminal) {
+        guard let idx = tabs.firstIndex(where: { $0.id == term.id }) else { return }
+        tabs.remove(at: idx)
 
-        if group.tabs.isEmpty {
-            // Drop the now-empty group, selecting a neighbour.
-            let gIdx = groups.firstIndex { $0.id == group.id } ?? 0
-            groups.remove(at: gIdx)
-            if groups.isEmpty {
-                // No terminals left: close the window.
-                NSApp.keyWindow?.close()
-                return
-            }
-            selectedGroupID = groups[min(gIdx, groups.count - 1)].id
-        } else {
-            // Select a neighbouring tab.
-            group.selectedTabID = group.tabs[min(idx, group.tabs.count - 1)].id
+        if tabs.isEmpty {
+            NSApp.keyWindow?.close()
+            return
         }
+        selectedTabID = tabs[min(idx, tabs.count - 1)].id
         focusSelected()
     }
 
@@ -353,33 +279,28 @@ final class AppModel {
             self.notify(from: term, title: "🔔", body: term.displayTitle)
         }
         // A keystroke or click in the content area acknowledges the tab's
-        // notification: the attention border and the unread marker (sidebar dot
-        // / horizontal-tab 🔔) dismiss together (see `acknowledge`).
+        // notification: the attention border and the unread marker (sidebar
+        // dot) dismiss together (see `acknowledge`).
         term.surfaceView.onInteraction = { [weak self, weak term] in
             guard let self, let term else { return }
             self.acknowledge(term)
         }
         term.surfaceView.onClose = { [weak self, weak term] in
             guard let self, let term else { return }
-            // Find which group holds it and close.
-            for group in self.groups where group.tabs.contains(where: { $0.id == term.id }) {
-                self.close(term, in: group)
-                return
-            }
+            self.close(term)
         }
         return term
     }
 
     /// Records `term` as unread and posts a system notification. Mirroring
-    /// cmux, the unread state is *always* recorded — the tab marker (🔔 /
-    /// sidebar dot) and, for the on-screen tab, the content-area attention
-    /// border show even while kterm is frontmost and this tab is focused. Only
-    /// the OS banner and the dock bounce are suppressed when the user is already
-    /// looking at this exact tab (kterm frontmost AND this tab visible). The
-    /// `terminalID` lets a tap on the notification focus this tab (see
-    /// `focusTerminal(withID:)`).
+    /// cmux, the unread state is *always* recorded — the sidebar unread dot
+    /// and, for the on-screen tab, the content-area attention border show even
+    /// while kterm is frontmost and this tab is focused. Only the OS banner and
+    /// the dock bounce are suppressed when the user is already looking at this
+    /// exact tab (kterm frontmost AND this tab visible). The `terminalID` lets
+    /// a tap on the notification focus this tab (see `focusTerminal(withID:)`).
     private func notify(from term: Terminal, title: String, body: String) {
-        let isVisible = selectedGroup?.selectedTab?.id == term.id
+        let isVisible = selectedTab?.id == term.id
         // The terminal on screen just pinged → show a static attention border
         // around the content area, even when kterm is frontmost (e.g. a build
         // finished while the user was reading its output). Leave an unread
@@ -400,7 +321,7 @@ final class AppModel {
     }
 
     /// Acknowledge `term`'s notification: clear the content-area attention
-    /// border and the tab's unread marker (🔔 / sidebar dot) together.
+    /// border and the tab's unread marker (sidebar dot) together.
     /// Mirroring cmux, a notification is marked read when its tab is selected,
     /// when kterm returns to the foreground, or on direct content interaction —
     /// not only on a keystroke/click. The guard avoids redundant Observation
@@ -425,7 +346,7 @@ final class AppModel {
 
     /// Make the selected terminal's view first responder so typing goes to it.
     private func focusSelected() {
-        guard let view = selectedGroup?.selectedTab?.surfaceView else { return }
+        guard let view = selectedTab?.surfaceView else { return }
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }

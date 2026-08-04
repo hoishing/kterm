@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// The window layout: the vertical tab sidebar on the left and the active
-/// terminal on the right. The selected group's horizontal tab strip sits in the
-/// titlebar above the terminal area only; the sidebar column extends up into the
-/// titlebar's left to host the macOS traffic-light buttons.
+/// terminal on the right. A thin titlebar hosts the macOS traffic-light buttons
+/// and is the only region that drags the window.
 struct RootView: View {
     let model: AppModel
 
@@ -12,7 +11,7 @@ struct RootView: View {
     /// Sidebar width captured at the start of a resize drag.
     @State private var dragStartWidth: CGFloat?
 
-    /// Titlebar height; matches `TabStrip`'s bar height.
+    /// Titlebar height for the traffic-light / window-drag strip.
     private let titlebarHeight: CGFloat = 38
     /// Leading space the traffic lights need when the sidebar is hidden.
     private let trafficLightInset: CGFloat = 72
@@ -30,10 +29,8 @@ struct RootView: View {
         model.sidebarVisible ? sidebarWidth : trafficLightInset
     }
 
-    /// The sidebar's background, reused for the titlebar area above it.
-    private var sidebarColor: Color { Color(nsColor: .windowBackgroundColor) }
     /// The terminal's background, reused for the titlebar area above it so the
-    /// tab strip and terminal read as one continuous surface.
+    /// chrome and terminal read as one continuous surface.
     private var terminalColor: Color { Color(nsColor: model.ghostty.backgroundColor) }
 
     var body: some View {
@@ -53,14 +50,11 @@ struct RootView: View {
                     Divider()
                 }
 
-                Group {
-                    if let group = model.selectedGroup {
-                        TabStrip(model: model, group: group)
-                    } else {
-                        Color.clear.frame(height: titlebarHeight)
-                    }
-                }
-                .background(terminalColor)
+                // Rest of the titlebar is a drag strip painted with the
+                // terminal background so it blends into the content below.
+                WindowDragArea(color: model.ghostty.backgroundColor)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: titlebarHeight)
             }
             .frame(height: titlebarHeight)
 
@@ -74,7 +68,7 @@ struct RootView: View {
                     resizeHandle
                 }
 
-                if let term = model.selectedGroup?.selectedTab {
+                if let term = model.selectedTab {
                     SurfaceContainer(terminal: term)
                         .id(term.id)
                         .overlay { AttentionBorder(active: term.showAttention) }

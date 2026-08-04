@@ -25,15 +25,15 @@ final class TabTitleTests: KtermUITestCase {
         typeInTerminal("cd ~")
         waitForLabel(sidebarRows.element(boundBy: 0), toEqual: "~")
 
-        // Each horizontal tab tracks its own directory independently.
+        // Each tab tracks its own directory independently.
         app.typeKey("t", modifierFlags: .command)
-        XCTAssertEqual(tabChips.element(boundBy: 0).label, "~")
+        XCTAssertEqual(sidebarRows.element(boundBy: 0).label, "~")
         // The new terminal's pwd report arrives asynchronously (OSC 7), so it
         // briefly reads "Terminal" (the no-pwd fallback) before settling on "~".
-        waitForLabel(tabChips.element(boundBy: 1), toEqual: "~")
+        waitForLabel(sidebarRows.element(boundBy: 1), toEqual: "~")
 
         typeInTerminal("cd ~/Library")
-        waitForLabel(tabChips.element(boundBy: 1), toEqual: "~/Library")
-        XCTAssertEqual(tabChips.element(boundBy: 0).label, "~", "the other tab's directory is untouched")
+        waitForLabel(sidebarRows.element(boundBy: 1), toEqual: "~/Library")
+        XCTAssertEqual(sidebarRows.element(boundBy: 0).label, "~", "the other tab's directory is untouched")
     }
 }

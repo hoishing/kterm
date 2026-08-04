@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A small "⌘N" capsule shown over a sidebar row while the user holds ⌘,
-/// hinting at that row's `Select Vertical Tab N` shortcut. Modeled on cmux's
+/// hinting at that row's `Select Tab N` shortcut. Modeled on cmux's
 /// `ShortcutHintPill`, trimmed to just the material capsule + label.
 struct ShortcutHintPill: View {
     let number: Int

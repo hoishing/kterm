@@ -1,29 +1,44 @@
-- refer cmux/ for the vertical + horizontal tab layout
-- refer ghostling/ for how to use `libghostty`
-- use swift, swiftUI for app shell, and `libghostty` for the core functionality
-- new tabs inherit the triggering tab's cwd (via `ghostty_surface_inherited_config`)
-  and default to opening right after it (`kterm-new-tab-position = after-current`)
-- SwiftUI's WindowGroup auto-opens a window for any file/folder open, so the app
-  sets `.handlesExternalEvents(matching: [])` and routes `open -a kterm <dir>`
-  into the front window itself (`AppModel.openDirectory`); the cold-launch first
-  window is opened manually via `AppModel.openNewWindow`
-- "build the app" means: Release build for arm64 only (`ARCHS=arm64`;
-  GhosttyKit.xcframework has no x86_64), then copy the product over
-  `/Applications/kterm.app` (fixed path keeps its Full Disk Access grant)
-- "publish the app" means: build the app, update e2e tests, README.md and this
-  CLAUDE.md if necessary, commit, push, then run e2e (`./scripts/run-e2e.sh`) if
-  the e2e tests were updated
+# kterm agent rules
+
+SwiftUI shell around `libghostty`. Vertical tabs only (sidebar).
+
+## References
+
+- Layout precedent: `cmux/`
+- `libghostty` usage: `ghostling/`
+
+## Stack
+
+- App shell: Swift + SwiftUI
+- Terminal core: `libghostty`
+
+## Tabs
+
+- New tabs inherit the triggering tab's cwd via `ghostty_surface_inherited_config`
+- Default insert position: right after current (`kterm-new-tab-position = after-current`)
+- Shortcuts: ⌘T new tab, ⌘⇧[ / ⌘⇧] cycle, ⌘W close, ⌘1…⌘9 jump
+
+## Window / open routing
+
+- SwiftUI `WindowGroup` auto-opens a window for any file/folder open
+- App sets `.handlesExternalEvents(matching: [])` and routes `open -a kterm <dir>` into the front window (`AppModel.openDirectory`)
+- Cold-launch first window is opened manually via `AppModel.openNewWindow`
+
+## Build / publish
+
+- **build the app:** Release, arm64 only (`ARCHS=arm64`; GhosttyKit.xcframework has no x86_64), then copy the product over `/Applications/kterm.app` (fixed path keeps its Full Disk Access grant)
+- **publish the app:** build → update e2e / README.md / this file if needed → commit → push → run e2e (`./scripts/run-e2e.sh`) if e2e changed
 
 ## e2e tests
 
-`ktermUITests` (XCUITest) drives the real macOS desktop, so it steals the
-screen if run locally with `xcodebuild test`. Fast-user-switching to a second
-account does NOT work around this — testmanagerd's control channel requires
-the console (active/foreground) session, so tests just hang and never connect
-in a backgrounded session.
+`ktermUITests` (XCUITest) drives the real macOS desktop and steals the screen if run locally with `xcodebuild test`.
 
-Run e2e tests via `./scripts/run-e2e.sh [TestClass[/testMethod]] [--wait]`,
-which dispatches `.github/workflows/e2e.yml` on a GitHub-hosted `macos-15`
-runner (`scripts/create-virtual-display.m`, borrowed from `cmux/`, gives it a
-virtual display since it has no physical one). Local machine is never
-touched; xcresult is uploaded as a workflow artifact.
+- Fast-user-switching to a second account does **not** work around this
+- testmanagerd's control channel requires the console (active/foreground) session
+- Backgrounded sessions hang and never connect
+
+Run via `./scripts/run-e2e.sh [TestClass[/testMethod]] [--wait]`:
+
+- Dispatches `.github/workflows/e2e.yml` on a GitHub-hosted `macos-15` runner
+- `scripts/create-virtual-display.m` (from `cmux/`) gives the runner a virtual display
+- Local machine is never touched; xcresult uploads as a workflow artifact

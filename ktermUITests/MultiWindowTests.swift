@@ -25,10 +25,10 @@ final class MultiWindowTests: KtermUITestCase {
         app.typeKey("t", modifierFlags: .command)
 
         XCTAssertTrue(
-            waitForTabChipCount(2, inWindowWithSidebarLabel: "/usr"),
+            waitForSidebarRowCount(2, inWindowWithSidebarLabel: "/usr"),
             "⌘T after ⌘` should add a tab to window A, the cycled-to window")
         XCTAssertEqual(
-            window(withSidebarLabel: "~")?.buttons.matching(identifier: "tabstrip.tab").count, 1,
+            window(withSidebarLabel: "~")?.buttons.matching(identifier: "sidebar.row").count, 1,
             "the other window should be left untouched")
 
         // ⌘Q quits the whole app — run last, as it tears down the instance.

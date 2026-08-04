@@ -24,7 +24,6 @@ class KtermUITestCase: XCTestCase {
     var sidebar: XCUIElement { app.descendants(matching: .any).matching(identifier: "sidebar").firstMatch }
     var surface: XCUIElement { app.otherElements["terminal.surface"] }
     var sidebarRows: XCUIElementQuery { app.buttons.matching(identifier: "sidebar.row") }
-    var tabChips: XCUIElementQuery { app.buttons.matching(identifier: "tabstrip.tab") }
 
     /// Waits for the terminal surface to appear, then for its first OSC 7 pwd
     /// report (`~`) to land, so callers never type into a shell that hasn't
@@ -48,7 +47,7 @@ class KtermUITestCase: XCTestCase {
     }
 
     /// The index of the element in `query` whose accessibility value marks
-    /// it "selected" (see `SidebarRow`/`TabChip`'s `.accessibilityValue`).
+    /// it "selected" (see `SidebarRow`'s `.accessibilityValue`).
     func selectedIndex(of query: XCUIElementQuery) -> Int? {
         for i in 0..<query.count where query.element(boundBy: i).value as? String == "selected" {
             return i
@@ -65,7 +64,7 @@ class KtermUITestCase: XCTestCase {
 
     /// Waits until `element`'s accessibility value equals `expected` — used to
     /// watch a tab flip between "selected", "unread", and "unselected" (see
-    /// `SidebarRow`/`TabChip`'s `.accessibilityValue`).
+    /// `SidebarRow`'s `.accessibilityValue`).
     func waitForValue(_ element: XCUIElement, toEqual expected: String, timeout: TimeInterval = 5) {
         let predicate = NSPredicate(format: "value == %@", expected)
         expectation(for: predicate, evaluatedWith: element)
@@ -118,14 +117,14 @@ class KtermUITestCase: XCTestCase {
         return nil
     }
 
-    /// Polls until the window identified by `label` holds `count` horizontal
-    /// tab chips (or times out).
-    func waitForTabChipCount(_ count: Int, inWindowWithSidebarLabel label: String,
-                             timeout: TimeInterval = 5) -> Bool {
+    /// Polls until the window identified by `label` holds `count` sidebar
+    /// rows (or times out).
+    func waitForSidebarRowCount(_ count: Int, inWindowWithSidebarLabel label: String,
+                                timeout: TimeInterval = 5) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
             if let w = window(withSidebarLabel: label),
-               w.buttons.matching(identifier: "tabstrip.tab").count == count { return true }
+               w.buttons.matching(identifier: "sidebar.row").count == count { return true }
             Thread.sleep(forTimeInterval: 0.1)
         } while Date() < deadline
         return false

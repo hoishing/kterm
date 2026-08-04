@@ -26,14 +26,14 @@ final class OpenDirectoryTests: KtermUITestCase {
     }
 
     func testOpenFolderReusesCurrentWindow() throws {
-        // The launch window starts as one window with one group (at home).
+        // The launch window starts as one window with one tab (at home).
         XCTAssertEqual(app.windows.count, 1)
         XCTAssertEqual(sidebarRows.count, 1)
 
         try openFolder(folderURL)
 
-        // The folder lands as a new vertical tab whose shell started in it — so
-        // its sidebar row shows the folder path. Waiting on that proves the open
+        // The folder lands as a new tab whose shell started in it — so its
+        // sidebar row shows the folder path. Waiting on that proves the open
         // was processed; a cold CI runner needs a generous timeout to attach.
         waitForLabel(sidebarRows.element(boundBy: 1), toEqual: expectedLabel, timeout: 15)
 
@@ -41,7 +41,7 @@ final class OpenDirectoryTests: KtermUITestCase {
         XCTAssertTrue(
             waitForWindowCount(1),
             "`open -a kterm <dir>` must reuse the current window, not open a new one")
-        XCTAssertEqual(sidebarRows.count, 2, "the folder should add exactly one vertical tab")
+        XCTAssertEqual(sidebarRows.count, 2, "the folder should add exactly one tab")
     }
 
     /// Runs `open -a <running kterm bundle> <dir>`, delivering a folder-open to

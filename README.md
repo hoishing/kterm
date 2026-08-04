@@ -1,88 +1,70 @@
 # kterm
 
-> a ghostty-based macOS terminal with vertical and horizontal tabs
+A ghostty-based macOS terminal with vertical tabs.
 
-A minimal native macOS terminal: a SwiftUI app shell around `libghostty` (the
-real GPU-rendered Ghostty core). Two levels of tabs, no splits.
+Minimal native shell: SwiftUI around `libghostty` (GPU-rendered Ghostty core).
+Sidebar tabs only — no horizontal strip, no splits.
 
 ## Features
 
-- **Two-level tabs** — vertical tabs (sidebar groups) and horizontal tabs
-  (terminals within a group)
-- **Git branch in sidebar** — shows the active tab's branch, refreshed on
-  `cd`/`git checkout` and when the window regains focus
-- **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
-  shortcut
-- **Terminal bell notifications** — a terminal bell (BEL / `\a`) or OSC 9/OSC
-  777 raises a macOS notification, so a bell-based cue (e.g. a CLI tool set to
-  notify via the terminal bell) surfaces even when kterm is in the background
-- **In-app notification cues** — a ping marks its tab so you can spot it: a 🔔
-  on its horizontal tab, a dot on its sidebar group, and — if it's the tab on
-  screen — a static border around the content area. They clear when you
-  acknowledge that tab: selecting it, switching kterm back to the foreground, or
-  interacting with its content (a keystroke or click)
-- **Dock bounce when unfocused** — a ping arriving while kterm isn't the active
-  app bounces the dock icon
-- **Smart notification suppression** — the macOS notification and dock bounce
-  fire only when you're not already looking at that exact tab; the tab still
-  gets its in-app 🔔/border so you can catch up after
-- **Click-to-focus notifications** — clicking a desktop notification brings
-  kterm forward and focuses the exact tab that raised it (restoring the window
-  if minimized)
-- **Drag & drop files** — dropping a file (e.g. an image) onto the terminal
-  inserts its shell-escaped path into the buffer, so tools like the Claude Code
-  CLI can pick it up as `[Image #1]`
-- **Open a folder** — `open -a kterm <dir>` (or Finder "Open With" / dropping a
-  folder on the app icon) opens a new tab whose shell starts in that folder,
-  reusing the current window rather than spawning a new one (a cold launch still
-  gets its first window)
+- **Vertical tabs:** each sidebar row is one terminal
+- **Git branch in sidebar:** active tab's branch, refreshed on `cd` / `git checkout` and window focus
+- **⌘-hold shortcut hints:** hold ⌘ to reveal each row's ⌘-digit shortcut
+- **Terminal bell notifications:** BEL (`\a`) or OSC 9/777 raises a macOS notification even when kterm is backgrounded
+- **In-app notification cues:** unread sidebar dot; static content-area border if the tab is on screen
+  - Clears on select, return-to-foreground, or content interaction (keystroke/click)
+- **Dock bounce when unfocused:** pings bounce the dock icon when kterm isn't active
+- **Smart notification suppression:** OS banner + dock bounce only when you're not already looking at that tab; in-app markers still set
+- **Click-to-focus notifications:** notification tap focuses the issuing tab (restores minimized windows)
+- **Drag & drop files:** drop inserts a shell-escaped path (e.g. Claude Code `[Image #1]`)
+- **Open a folder:** `open -a kterm <dir>` (or Finder / drop on icon) opens a new tab in that cwd in the current window
+  - Cold launch still gets its first window
 
 ## Shortcuts
 
 | Key | Action |
 | --- | --- |
-| ⌘N | New **vertical** tab (a new group in the left sidebar) |
-| ⌘T | New **horizontal** tab (a new terminal in the current group) |
+| ⌘T | New tab |
 | ⌘W | Close the active tab |
 | ⌘B | Toggle the sidebar |
-| ⌘1…⌘9 | Jump to vertical tab (group) by position |
-| ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab (terminal) |
-| ⌘⌃[ / ⌘⌃] | Previous / next vertical tab (group) |
+| ⌘1…⌘9 | Jump to tab by position |
+| ⌘⇧[ / ⌘⇧] | Previous / next tab |
+| ⌘⇧N | New window |
+| ⌘` | Cycle windows |
 | ⌘Q | Quit (no confirmation) |
 
-Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit
-shortcut as a hint.
+Hold ⌘ alone ~0.5s to reveal each sidebar row's ⌘-digit hint.
 
 ## Configuration
 
-Text file at `~/.config/kterm/config` (`key = value`). `kterm-` keys configure
-the app shell; everything else passes through to libghostty. See
-[`config.example`](./config.example).
+File: `~/.config/kterm/config` (`key = value`).
+
+- `kterm-` keys: app shell
+- Everything else: passed through to libghostty
+
+See [`config.example`](./config.example).
 
 ### Built-in options
 
-Baked-in defaults (override by setting the same key in your config):
+Defaults baked in (override in your config):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `macos-option-as-alt` | `left` | Left ⌥ acts as Alt/Meta (e.g. for readline word-jump) |
+| `macos-option-as-alt` | `left` | Left ⌥ acts as Alt/Meta (e.g. readline word-jump) |
 
-`kterm-` keys (app shell, no libghostty default):
+`kterm-` keys (app shell only):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
-| `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
-| `kterm-font-ligatures` | `false` | Programming ligatures. Off by default; set `true` to enable. Disabling maps to Ghostty's `font-feature = -calt, -liga, -dlig` |
+| `kterm-sidebar-width` | `160` | Vertical tab sidebar width, points |
+| `kterm-new-tab-position` | `after-current` | New ⌘T tab lands after current, or `end` to append |
+| `kterm-font-ligatures` | `false` | Programming ligatures; `true` enables. Off maps to Ghostty `font-feature = -calt, -liga, -dlig` |
 
-New tabs inherit the working directory of the tab they were opened from
-(honouring libghostty's `window-inherit-working-directory`).
+New tabs inherit the opener's cwd (libghostty `window-inherit-working-directory`).
 
 ## Addressing a tab
 
-Each tab's shell gets a `KTERM_TAB_ID` environment variable holding that tab's
-id. Opening `kterm://focus-tab?id=<id>` raises that tab (the mechanism behind
-click-to-focus notifications), so a script can jump you back to its own tab:
+Each tab's shell gets `KTERM_TAB_ID`. Opening `kterm://focus-tab?id=<id>` raises that tab (same path as notification taps):
 
 ```sh
 open "kterm://focus-tab?id=$KTERM_TAB_ID"
@@ -90,29 +72,28 @@ open "kterm://focus-tab?id=$KTERM_TAB_ID"
 
 ## Build
 
-Requires Xcode (with the Metal Toolchain component) and
-[XcodeGen](https://github.com/yonsm/XcodeGen).
+Needs Xcode (Metal Toolchain) and [XcodeGen](https://github.com/yonsm/XcodeGen).
 
 ```sh
-git submodule update --init ghostty   # the pinned ghostty source
-./scripts/build-ghosttykit.sh         # builds GhosttyKit.xcframework (needs Zig 0.15.2; auto-downloaded)
-xcodegen generate                     # generates kterm.xcodeproj from project.yml
+git submodule update --init ghostty   # pinned ghostty source
+./scripts/build-ghosttykit.sh         # GhosttyKit.xcframework (Zig 0.15.2; auto-downloaded)
+xcodegen generate                     # kterm.xcodeproj from project.yml
 xcodebuild -project kterm.xcodeproj -scheme kterm -configuration Release
 ```
 
-`build-ghosttykit.sh` downloads the exact Zig toolchain, pins Zig's macOS SDK to
-the Command Line Tools' macOS 15 SDK (Zig 0.15.2 can't parse the macOS 26 SDK),
-and emits `GhosttyKit.xcframework` from the `ghostty/` submodule.
+`build-ghosttykit.sh`:
+
+- Downloads the exact Zig toolchain
+- Pins Zig's macOS SDK to the CLT macOS 15 SDK (Zig 0.15.2 can't parse macOS 26 SDK)
+- Emits `GhosttyKit.xcframework` from `ghostty/`
 
 ## Layout
 
 ```
 Window
 └─ HStack
-   ├─ Sidebar          vertical tabs (groups)        ⌘N adds, ⌘B toggles, resizable
-   └─ VStack
-      ├─ TabStrip      horizontal tabs (terminals)   ⌘T adds, ⌘W closes, scrolls on overflow
-      └─ SurfaceView   the active libghostty terminal
+   ├─ Sidebar          vertical tabs                 ⌘T adds, ⌘B toggles, resizable
+   └─ SurfaceView      the active libghostty terminal
 ```
 
-Tab titles track each terminal's working directory (via `GHOSTTY_ACTION_PWD`).
+Tab titles track each terminal's working directory (`GHOSTTY_ACTION_PWD`).

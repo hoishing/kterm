@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 }
 
 /// Exposes the key window's `AppModel` to the menu commands. Published per
-/// window via `.focusedSceneValue`, so ⌘N/⌘T/… act on the front window.
+/// window via `.focusedSceneValue`, so ⌘T/… act on the front window.
 extension FocusedValues {
     var appModel: AppModel? {
         get { self[AppModelKey.self] }
@@ -97,7 +97,7 @@ struct KtermApp: App {
             WindowRoot(ghostty: ghostty, config: config)
         }
         // Hardcodes Ghostty's `macos-titlebar-style = tabs`: hide the system
-        // titlebar so the tab strip (RootView) fills it edge to edge.
+        // titlebar so RootView's custom chrome fills it edge to edge.
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: [])
         .commands { KtermCommands() }
@@ -154,11 +154,10 @@ private struct KtermCommands: Commands {
         let openWindow = openWindow
         let _ = (AppModel.openNewWindow = { openWindow(id: "main") })
         // Replace the default New Window (⌘N) with kterm's tab commands, plus
-        // ⌘⇧N to open a new window.
+        // ⌘⇧N to open a new window. ⌘N itself is left free so it doesn't steal
+        // the new-tab binding from ⌘T.
         CommandGroup(replacing: .newItem) {
-            Button("New Vertical Tab") { model?.newVerticalTab() }
-                .keyboardShortcut("n", modifiers: .command)
-            Button("New Horizontal Tab") { model?.newHorizontalTab() }
+            Button("New Tab") { model?.newTab() }
                 .keyboardShortcut("t", modifiers: .command)
             Button("New Window") { openWindow(id: "main") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -179,25 +178,19 @@ private struct KtermCommands: Commands {
 
             Divider()
 
-            // ⌘1…⌘9 — jump to a vertical tab (group) by position.
+            // ⌘1…⌘9 — jump to a tab by position.
             ForEach(1...9, id: \.self) { n in
-                Button("Select Vertical Tab \(n)") { model?.selectGroup(at: n - 1) }
+                Button("Select Tab \(n)") { model?.selectTab(at: n - 1) }
                     .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
             }
 
             Divider()
 
-            // ⌘⇧[ / ⌘⇧] — previous/next horizontal tab (terminal).
-            Button("Previous Horizontal Tab") { model?.selectPrevHorizontalTab() }
+            // ⌘⇧[ / ⌘⇧] — previous/next tab.
+            Button("Previous Tab") { model?.selectPrevTab() }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
-            Button("Next Horizontal Tab") { model?.selectNextHorizontalTab() }
+            Button("Next Tab") { model?.selectNextTab() }
                 .keyboardShortcut("]", modifiers: [.command, .shift])
-
-            // ⌘⌃[ / ⌘⌃] — previous/next vertical tab (group).
-            Button("Previous Vertical Tab") { model?.selectPrevVerticalTab() }
-                .keyboardShortcut("[", modifiers: [.command, .control])
-            Button("Next Vertical Tab") { model?.selectNextVerticalTab() }
-                .keyboardShortcut("]", modifiers: [.command, .control])
         }
         // ⌘` — cycle key focus through kterm's windows.
         CommandGroup(after: .windowList) {
