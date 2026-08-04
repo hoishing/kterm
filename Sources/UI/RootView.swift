@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// The window layout: the vertical tab sidebar on the left and the active
-/// terminal on the right. A thin titlebar hosts the macOS traffic-light buttons
-/// and is the only region that drags the window.
+/// terminal on the right. The sidebar column extends to the top of the window
+/// (hosting the traffic lights on its dark background). The content column
+/// keeps a slim top drag strip instead of a full titlebar.
 struct RootView: View {
     let model: AppModel
 
@@ -11,8 +12,10 @@ struct RootView: View {
     /// Sidebar width captured at the start of a resize drag.
     @State private var dragStartWidth: CGFloat?
 
-    /// Titlebar height for the traffic-light / window-drag strip.
+    /// Height of the drag strip above the sidebar (clears the traffic lights).
     private let titlebarHeight: CGFloat = 38
+    /// Slim top padding / drag strip above the terminal content.
+    private let contentTopPadding: CGFloat = 20
     /// Leading space the traffic lights need when the sidebar is hidden.
     private let trafficLightInset: CGFloat = 72
     private let minSidebar: CGFloat = 120
@@ -23,61 +26,66 @@ struct RootView: View {
         _sidebarWidth = State(initialValue: sidebarWidth)
     }
 
-    /// Left column width in the titlebar row: the sidebar when shown, otherwise
-    /// just enough to clear the traffic lights.
-    private var titlebarLeadingWidth: CGFloat {
-        model.sidebarVisible ? sidebarWidth : trafficLightInset
+    /// Top inset on the content column. With the sidebar shown the traffic
+    /// lights sit over the sidebar, so content only needs a slim drag strip;
+    /// with it hidden, keep a full titlebar height so they don't cover the
+    /// terminal.
+    private var contentTopHeight: CGFloat {
+        model.sidebarVisible ? contentTopPadding : titlebarHeight
     }
 
-    /// The terminal's background, reused for the titlebar area above it so the
+    /// The terminal's background, reused for the drag strip above it so the
     /// chrome and terminal read as one continuous surface.
     private var terminalColor: Color { Color(nsColor: model.ghostty.backgroundColor) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Titlebar row. No divider below it: the titlebar shares the
-            // sidebar/terminal backgrounds so each side reads as one surface.
-            HStack(spacing: 0) {
-                // Empty space above the sidebar that holds the traffic lights.
-                // This is the only region that drags the window (the window is
-                // not movable by its background, so the terminal keeps its own
-                // mouse drags for text selection).
-                WindowDragArea(color: model.sidebarVisible
-                    ? NSColor.windowBackgroundColor : model.ghostty.backgroundColor)
-                    .frame(width: titlebarLeadingWidth, height: titlebarHeight)
-
-                if model.sidebarVisible {
-                    Divider()
-                }
-
-                // Rest of the titlebar is a drag strip painted with the
-                // terminal background so it blends into the content below.
-                WindowDragArea(color: model.ghostty.backgroundColor)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: titlebarHeight)
-            }
-            .frame(height: titlebarHeight)
-
-            // Content row.
-            HStack(spacing: 0) {
-                if model.sidebarVisible {
+        // Two full-height columns: sidebar bg runs under the traffic lights;
+        // content keeps a slim top drag strip. WindowDragArea always gets an
+        // explicit width×height (same as the pre-refactor titlebar) so the
+        // NSView cannot expand and paint over the sidebar list.
+        HStack(spacing: 0) {
+            if model.sidebarVisible {
+                VStack(spacing: 0) {
+                    WindowDragArea(color: .windowBackgroundColor)
+                        .frame(width: sidebarWidth, height: titlebarHeight)
                     Sidebar(model: model)
                         .frame(width: sidebarWidth)
-
-                    Divider()
-                    resizeHandle
+                        .frame(maxHeight: .infinity)
                 }
+                .frame(width: sidebarWidth)
+                .frame(maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+
+                Divider()
+                resizeHandle
+            }
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    if !model.sidebarVisible {
+                        WindowDragArea(color: model.ghostty.backgroundColor)
+                            .frame(width: trafficLightInset, height: contentTopHeight)
+                    }
+                    WindowDragArea(color: model.ghostty.backgroundColor)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: contentTopHeight)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: contentTopHeight)
 
                 if let term = model.selectedTab {
                     SurfaceContainer(terminal: term)
                         .id(term.id)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay { AttentionBorder(active: term.showAttention) }
                 } else {
                     emptyState
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 640, minHeight: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator(model: model))
         .overlay(alignment: .bottomTrailing) { uiTestDragSource }
@@ -194,19 +202,36 @@ struct SidebarResizeHandle: NSViewRepresentable {
     }
 }
 
-/// A titlebar-colored strip that drags the window on click. Used only for the
-/// area above the sidebar so the terminal keeps its own mouse drags (for text
-/// selection). Implemented as an inline NSView (not a background) so it reliably
-/// receives the mouse-down that starts the drag.
+/// A colored strip that drags the window on click. Used for the chrome above
+/// the sidebar and the slim strip above the terminal so the terminal keeps its
+/// own mouse drags (for text selection). Implemented as an inline NSView (not a
+/// background) so it reliably receives the mouse-down that starts the drag.
+///
+/// Callers must give it an explicit `.frame(width:height:)` (or equivalent).
+/// Paint via `draw(_:)` (not `layer.backgroundColor`) so dynamic colors like
+/// `.windowBackgroundColor` resolve against the current appearance.
 struct WindowDragArea: NSViewRepresentable {
     var color: NSColor
 
     final class View: NSView {
-        var color: NSColor = .clear
+        var color: NSColor = .clear {
+            didSet { needsDisplay = true }
+        }
+
+        // SwiftUI owns the size via `.frame`; don't advertise an intrinsic size
+        // that could fight the layout.
+        override var intrinsicContentSize: NSSize {
+            NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+        }
 
         override func draw(_ dirtyRect: NSRect) {
             color.setFill()
-            dirtyRect.fill()
+            bounds.fill()
+        }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            needsDisplay = true
         }
 
         override func mouseDown(with event: NSEvent) {
@@ -221,7 +246,7 @@ struct WindowDragArea: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
-        let view = View()
+        let view = View(frame: .zero)
         view.color = color
         return view
     }
@@ -229,13 +254,12 @@ struct WindowDragArea: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let view = nsView as? View else { return }
         view.color = color
-        view.needsDisplay = true
     }
 }
 
 /// Applies one-time NSWindow tweaks that SwiftUI doesn't expose. The window is
-/// NOT movable by its background — only `WindowDragArea` (the titlebar above the
-/// sidebar) moves it — so the terminal keeps its own mouse drags for selection.
+/// NOT movable by its background — only `WindowDragArea` strips move it — so the
+/// terminal keeps its own mouse drags for selection.
 struct WindowConfigurator: NSViewRepresentable {
     let model: AppModel
 
