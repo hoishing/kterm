@@ -53,6 +53,7 @@ struct Sidebar: View {
 private struct SidebarRow: View {
     let title: String
     /// Git branch of the tab's folder, if any — shown under the title.
+    /// `nil` still reserves the same second-line height as a real branch.
     let branch: String?
     let isSelected: Bool
     /// Any tab in this group has an unread notification → show a dot.
@@ -76,13 +77,14 @@ private struct SidebarRow: View {
                         .font(.system(size: Self.titleFontSize))
                         .lineLimit(1)
                         .truncationMode(.head)
-                    if let branch {
-                        Text(branch)
-                            .font(.system(size: Self.titleFontSize - 2))
-                            .foregroundStyle(Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+                    // Always reserve the branch line so rows inside/outside a
+                    // git repo share the same height.
+                    Text(branch ?? " ")
+                        .font(.system(size: Self.titleFontSize - 2))
+                        .foregroundStyle(Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .opacity(branch == nil ? 0 : 1)
                 }
                 Spacer(minLength: 0)
                 // Persists even when the group is selected; cleared only by
