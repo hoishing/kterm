@@ -10,10 +10,11 @@ final class Terminal: Identifiable {
     var title: String = ""
     /// Current working directory reported by the shell, if any.
     var pwd: String = ""
-    /// Git branch of `pwd`, if it's inside a repo (refreshed on `pwd` change
-    /// and whenever this tab regains focus, so `git checkout` in-shell shows
-    /// up too). `nil` outside a repo or in detached HEAD.
-    var branch: String?
+    /// Git branch + Starship-style status of `pwd`, if it's inside a repo
+    /// (refreshed on `pwd` change and whenever this tab regains focus, so
+    /// `git checkout` / dirty worktree changes show up too). `nil` outside a
+    /// repo or in detached HEAD.
+    var git: GitBranch.Info?
     let surfaceView: SurfaceView
 
     /// Has an unread notification/bell that the user hasn't acknowledged yet.
@@ -82,9 +83,9 @@ final class TabGroup: Identifiable {
     /// Group title mirrors the active terminal.
     var displayTitle: String { selectedTab?.displayTitle ?? "Terminal" }
 
-    /// Git branch shown under the folder title in the sidebar, mirroring the
+    /// Git info shown under the folder title in the sidebar, mirroring the
     /// active terminal's `pwd`.
-    var branch: String? { selectedTab?.branch }
+    var git: GitBranch.Info? { selectedTab?.git }
 
     /// Any horizontal tab in this group has an unread notification → the sidebar
     /// row shows an unread dot.
@@ -411,15 +412,15 @@ final class AppModel {
         term.hasUnread = false
     }
 
-    /// Re-resolves `term`'s git branch from its current `pwd`, off the main
-    /// thread. Guards against races (pwd changing again mid-lookup, or the
-    /// terminal closing) by re-checking `pwd` before writing back.
+    /// Re-resolves `term`'s git branch + status from its current `pwd`, off
+    /// the main thread. Guards against races (pwd changing again mid-lookup,
+    /// or the terminal closing) by re-checking `pwd` before writing back.
     private func refreshBranch(for term: Terminal) {
         let pwd = term.pwd
         Task { @MainActor [weak term] in
-            let branch = await GitBranch.current(for: pwd)
+            let git = await GitBranch.info(for: pwd)
             guard let term, term.pwd == pwd else { return }
-            term.branch = branch
+            term.git = git
         }
     }
 

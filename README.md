@@ -9,7 +9,8 @@ real GPU-rendered Ghostty core). Two levels of tabs, no splits.
 
 - **Two-level tabs** — vertical tabs (sidebar groups) and horizontal tabs
   (terminals within a group)
-- **Git branch in sidebar** — shows the active tab's branch, refreshed on
+- **Git branch in sidebar** — shows the active tab's branch plus a
+  Starship-style status (`[!?]` dirty/untracked, `[⇡]` ahead, …), refreshed on
   `cd`/`git checkout` and when the window regains focus
 - **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
   shortcut

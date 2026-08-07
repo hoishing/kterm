@@ -14,7 +14,7 @@ struct Sidebar: View {
                     ForEach(Array(model.groups.enumerated()), id: \.element.id) { index, group in
                         SidebarRow(
                             title: group.displayTitle,
-                            branch: group.branch,
+                            git: group.git,
                             isSelected: group.id == model.selectedGroup?.id,
                             hasUnread: group.hasUnread,
                             // Only the first 9 groups have a ⌘-digit shortcut.
@@ -52,9 +52,9 @@ struct Sidebar: View {
 
 private struct SidebarRow: View {
     let title: String
-    /// Git branch of the tab's folder, if any — shown under the title.
+    /// Git branch + status of the tab's folder, if any — shown under the title.
     /// `nil` still reserves the same second-line height as a real branch.
-    let branch: String?
+    let git: GitBranch.Info?
     let isSelected: Bool
     /// Any tab in this group has an unread notification → show a dot.
     let hasUnread: Bool
@@ -68,6 +68,10 @@ private struct SidebarRow: View {
     /// here purely so the branch line below has a stable "2pt smaller" to
     /// size against.
     private static let titleFontSize: CGFloat = 13
+    /// Branch name stays purple (prior sidebar accent).
+    private static let branchColor = Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255)
+    /// Status brackets use Ghostty Default Style Dark palette 1 (ANSI red).
+    private static let statusColor = Color(red: 0xCC / 255, green: 0x65 / 255, blue: 0x66 / 255)
 
     var body: some View {
         Button(action: select) {
@@ -78,13 +82,13 @@ private struct SidebarRow: View {
                         .lineLimit(1)
                         .truncationMode(.head)
                     // Always reserve the branch line so rows inside/outside a
-                    // git repo share the same height.
-                    Text(branch ?? " ")
+                    // git repo share the same height. Starship-style:
+                    // `main` or `main [!?]` / `main [⇡]`.
+                    gitLine
                         .font(.system(size: Self.titleFontSize - 2))
-                        .foregroundStyle(Color(red: 180 / 255, green: 141 / 255, blue: 173 / 255))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .opacity(branch == nil ? 0 : 1)
+                        .opacity(git == nil ? 0 : 1)
                 }
                 Spacer(minLength: 0)
                 // Persists even when the group is selected; cleared only by
@@ -112,5 +116,24 @@ private struct SidebarRow: View {
         // Unread takes precedence over selected: with dismiss-on-interaction, a
         // group can be both selected and unread until the user interacts.
         .accessibilityValue(hasUnread ? "unread" : (isSelected ? "selected" : "unselected"))
+    }
+
+    /// `branch` in purple, optional ` [status]` in theme red. Placeholder when
+    /// `git == nil` so the row still reserves second-line height.
+    @ViewBuilder
+    private var gitLine: some View {
+        if let git {
+            HStack(spacing: 0) {
+                Text(git.name)
+                    .foregroundStyle(Self.branchColor)
+                if !git.status.isEmpty {
+                    Text(" [\(git.status)]")
+                        .foregroundStyle(Self.statusColor)
+                }
+            }
+        } else {
+            Text(" ")
+                .foregroundStyle(Self.branchColor)
+        }
     }
 }
