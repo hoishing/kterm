@@ -29,11 +29,11 @@ struct KtermConfig {
     var fontLigatures: Bool = false
 
     /// Font family for app-shell chrome (sidebar, tab strip, pills, empty
-    /// states, …). `kterm-ui-font-family`. Default `monospace` uses the system
-    /// monospaced face; any installed family name works (e.g. `SF Pro`,
-    /// `Helvetica Neue`). Does not affect the terminal surface — that still
-    /// uses Ghostty's `font-family`.
-    var uiFontFamily: String = "monospace"
+    /// states, …). `kterm-ui-font-family`. Default `JetBrainsMono Nerd Font Mono`;
+    /// falls back to the system UI font when unavailable. `monospace` always
+    /// uses the system monospaced face. Does not affect the terminal surface —
+    /// that still uses Ghostty's `font-family`.
+    var uiFontFamily: String = "JetBrainsMono Nerd Font Mono"
 
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
@@ -43,6 +43,8 @@ struct KtermConfig {
     /// for scalar keys).
     private static let builtinDefaults = [
         "macos-option-as-alt = left",
+        "copy-on-select = clipboard",
+        "theme = Ghostty Default Style Dark",
     ]
 
     /// Ghostty `font-feature` line that turns programming ligatures off, per

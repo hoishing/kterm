@@ -61,6 +61,8 @@ Baked-in defaults (override by setting the same key in your config):
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `macos-option-as-alt` | `left` | Left ⌥ acts as Alt/Meta (e.g. for readline word-jump) |
+| `copy-on-select` | `clipboard` | Selecting text copies it to the system clipboard |
+| `theme` | `Ghostty Default Style Dark` | Terminal color theme (bundled with kterm) |
 
 `kterm-` keys (app shell, no libghostty default):
 
@@ -69,7 +71,7 @@ Baked-in defaults (override by setting the same key in your config):
 | `kterm-sidebar-width` | `160` | Width of the vertical tab sidebar, in points |
 | `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
 | `kterm-font-ligatures` | `false` | Programming ligatures. Off by default; set `true` to enable. Disabling maps to Ghostty's `font-feature = -calt, -liga, -dlig` |
-| `kterm-ui-font-family` | `monospace` | Font for app-shell chrome (sidebar, tab titles, shortcut pills, empty states). `monospace` uses the system monospaced face; any installed family name works. Terminal text still uses Ghostty's `font-family` |
+| `kterm-ui-font-family` | `JetBrainsMono Nerd Font Mono` | Font for app-shell chrome (sidebar, tab titles, shortcut pills, empty states). Falls back to the system UI font when the family isn't installed; `monospace` uses the system monospaced face. Terminal text still uses Ghostty's `font-family` |
 
 New tabs and split panes inherit the working directory of the tab/pane they were
 opened from (honouring libghostty's `window-inherit-working-directory`).

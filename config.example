@@ -11,13 +11,16 @@ kterm-sidebar-width = 160
 kterm-new-tab-position = after-current
 # Programming ligatures are off by default; set to true to enable them
 kterm-font-ligatures = false
-# App-shell chrome font (sidebar, tabs, pills, …). `monospace` = system mono.
-# kterm-ui-font-family = monospace
+# App-shell chrome font (sidebar, tabs, pills, …). Default shown; falls back
+# to the system UI font when the family isn't installed. `monospace` = system mono.
+# kterm-ui-font-family = JetBrainsMono Nerd Font Mono
 
 # --- terminal (libghostty) ---
+# kterm built-in defaults (override by setting the same key here):
+#   macos-option-as-alt = left
+#   copy-on-select = clipboard
+#   theme = Ghostty Default Style Dark   (bundled; more at ghostty.org/docs)
 font-family = JetBrains Mono
 font-size = 13
-theme = dark
 cursor-style = block
 # command = /bin/zsh
-# macos-option-as-alt = left   # kterm built-in default; uncomment to override

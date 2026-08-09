@@ -6,6 +6,7 @@ import SwiftUI
 /// Configured once at launch via `configure(family:)`. Every visible chrome
 /// label (sidebar rows, tab chips, shortcut pills, empty states, …) goes
 /// through `font(size:weight:)` so one config key restyles them all.
+/// Unavailable family names fall back to the system UI font (SF Pro).
 enum KtermUIFont {
     /// Configured family. Empty or `monospace` → system monospaced (default).
     private(set) static var family: String = "monospace"
@@ -14,8 +15,9 @@ enum KtermUIFont {
         self.family = family.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// UI text font at `size` / `weight`. Unknown family names fall back to
-    /// system monospaced so missing faces never blank out chrome labels.
+    /// UI text font at `size` / `weight`. `monospace` (or empty) uses the
+    /// system monospaced face; any other family resolves by name, falling back
+    /// to the system UI font (SF Pro) when the family isn't installed.
     static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name = family
         if name.isEmpty || name.lowercased() == "monospace" {
@@ -23,17 +25,18 @@ enum KtermUIFont {
         }
 
         let nsWeight = Self.nsWeight(weight)
-        // Family name first ("JetBrains Mono", "Helvetica Neue").
+        // Family name first ("JetBrainsMono Nerd Font Mono", "Helvetica Neue").
         if let font = NSFontManager.shared.font(
             withFamily: name, traits: [], weight: nsWeight, size: size
         ) {
             return Font(font)
         }
-        // PostScript / full name fallback ("JetBrainsMono-Regular").
+        // PostScript / full name fallback ("JetBrainsMonoNFM-Regular").
         if let font = NSFont(name: name, size: size) {
             return Font(font)
         }
-        return .system(size: size, weight: weight, design: .monospaced)
+        // Not installed → system UI font (SF Pro), not monospaced.
+        return .system(size: size, weight: weight)
     }
 
     /// NSFontManager weight scale is 0…15; 5 is regular.
