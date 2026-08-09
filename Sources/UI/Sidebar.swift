@@ -31,6 +31,7 @@ struct Sidebar: View {
 
             Button(action: { model.newVerticalTab() }) {
                 Label("New Tab", systemImage: "plus")
+                    .font(KtermUIFont.font(size: 13))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -78,14 +79,14 @@ private struct SidebarRow: View {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: Self.titleFontSize))
+                        .font(KtermUIFont.font(size: Self.titleFontSize))
                         .lineLimit(1)
                         .truncationMode(.head)
                     // Always reserve the branch line so rows inside/outside a
                     // git repo share the same height. Starship-style:
                     // `main` or `main [!?]` / `main [⇡]`.
                     gitLine
-                        .font(.system(size: Self.titleFontSize - 2))
+                        .font(KtermUIFont.font(size: Self.titleFontSize - 2))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .opacity(git == nil ? 0 : 1)

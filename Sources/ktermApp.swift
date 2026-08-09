@@ -89,6 +89,8 @@ struct KtermApp: App {
     init() {
         let config = KtermConfig.load()
         self.config = config
+        // Resolve chrome font before any window body runs.
+        KtermUIFont.configure(family: config.uiFontFamily)
         self.ghostty = GhosttyApp(config: config)
     }
 
@@ -125,12 +127,17 @@ private struct WindowRoot: View {
                     "libghostty failed to initialize",
                     systemImage: "exclamationmark.triangle",
                     description: Text("Check Console.app for kterm logs.")
+                        .font(KtermUIFont.font(size: 13))
                 )
+                .font(KtermUIFont.font(size: 15))
             } else if let model {
                 RootView(model: model, sidebarWidth: config.sidebarWidth)
                     // Make this window's model the target of the menu commands
                     // whenever it's the key window.
                     .focusedSceneValue(\.appModel, model)
+                    // Default chrome font; explicit sizes still go through
+                    // `KtermUIFont` where they pin a point size.
+                    .font(KtermUIFont.font(size: 13))
             }
         }
         .onAppear {

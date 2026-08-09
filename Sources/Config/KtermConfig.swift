@@ -28,6 +28,13 @@ struct KtermConfig {
     /// `-calt, -liga, -dlig` idiom Ghostty documents for turning ligatures off).
     var fontLigatures: Bool = false
 
+    /// Font family for app-shell chrome (sidebar, tab strip, pills, empty
+    /// states, …). `kterm-ui-font-family`. Default `monospace` uses the system
+    /// monospaced face; any installed family name works (e.g. `SF Pro`,
+    /// `Helvetica Neue`). Does not affect the terminal surface — that still
+    /// uses Ghostty's `font-family`.
+    var uiFontFamily: String = "monospace"
+
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
 
@@ -91,6 +98,9 @@ struct KtermConfig {
             if let p = NewTabPosition(rawValue: value) { newTabPosition = p }
         case "kterm-font-ligatures":
             if let b = Self.parseBool(value) { fontLigatures = b }
+        case "kterm-ui-font-family":
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { uiFontFamily = trimmed }
         default:
             break // unknown kterm- key: ignore
         }

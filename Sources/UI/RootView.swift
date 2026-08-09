@@ -112,11 +112,19 @@ struct RootView: View {
             // The state is encoded in the identifier (`.on`/`.off`) rather than
             // an accessibility value: XCUITest doesn't surface `.value` for a
             // plain non-control probe element, but it does surface identifiers.
-            let state = KtermConfig.load().fontLigatures ? "on" : "off"
+            let cfg = KtermConfig.load()
+            let liga = cfg.fontLigatures ? "on" : "off"
+            // Encode the family in the identifier so UI tests can assert the
+            // parsed `kterm-ui-font-family` without reaching into Swift state.
+            let family = cfg.uiFontFamily.isEmpty ? "monospace" : cfg.uiFontFamily
             Color.clear
                 .frame(width: 1, height: 1)
                 .accessibilityElement()
-                .accessibilityIdentifier("config.fontLigatures.\(state)")
+                .accessibilityIdentifier("config.fontLigatures.\(liga)")
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("config.uiFontFamily.\(family)")
         }
         #endif
     }
@@ -154,7 +162,11 @@ struct RootView: View {
 
     private var emptyState: some View {
         terminalColor
-            .overlay(Text("No terminal").foregroundStyle(.secondary))
+            .overlay(
+                Text("No terminal")
+                    .font(KtermUIFont.font(size: 13))
+                    .foregroundStyle(.secondary)
+            )
     }
 }
 

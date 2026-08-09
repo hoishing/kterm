@@ -127,13 +127,13 @@ private struct TabChip: View {
             // notification (mirrors `computeTitle`'s "🔔 " in ghostty's
             // BaseTerminalController).
             if hasUnread {
-                Text("🔔").font(.system(size: 11))
+                Text("🔔").font(KtermUIFont.font(size: 11))
             }
 
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.head)
-                .font(.system(size: 12))
+                .font(KtermUIFont.font(size: 12))
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 8)

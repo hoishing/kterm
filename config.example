@@ -11,6 +11,8 @@ kterm-sidebar-width = 160
 kterm-new-tab-position = after-current
 # Programming ligatures are off by default; set to true to enable them
 kterm-font-ligatures = false
+# App-shell chrome font (sidebar, tabs, pills, …). `monospace` = system mono.
+# kterm-ui-font-family = monospace
 
 # --- terminal (libghostty) ---
 font-family = JetBrains Mono

@@ -8,7 +8,7 @@ struct ShortcutHintPill: View {
 
     var body: some View {
         Text("⌘\(number)")
-            .font(.system(size: 11, weight: .semibold))
+            .font(KtermUIFont.font(size: 11, weight: .semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
