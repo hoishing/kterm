@@ -2,8 +2,9 @@ import SwiftUI
 
 /// Horizontal tab strip for the selected group, rendered inside the titlebar
 /// above the terminal area (Ghostty `macos-titlebar-style = tabs`). Each tab is
-/// a terminal (⌘T adds one; the × or ⌘W closes one). Tabs divide the available
-/// width equally — 2 tabs → 50% each — so the strip always fills the area.
+/// a split tree of terminals (⌘T adds a tab; the × closes the whole tab; ⌘W
+/// closes only the focused pane). Tabs divide the available width equally —
+/// 2 tabs → 50% each — so the strip always fills the area.
 struct TabStrip: View {
     @Bindable var model: AppModel
     @Bindable var group: TabGroup
@@ -93,7 +94,7 @@ private struct TabChip: View {
             }
             .buttonStyle(.plain)
             .opacity(hovering || isSelected ? 1 : 0)
-            .help("Close tab (⌘W)")
+            .help("Close tab")
             .accessibilityIdentifier("tabstrip.tab.close")
 
             // Ghostty-style bell prefixing the title on an unacknowledged

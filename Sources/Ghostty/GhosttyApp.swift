@@ -162,6 +162,71 @@ final class GhosttyApp {
             DispatchQueue.main.async { view.onBell?() }
             return true
 
+        // Split actions are handled by the owning AppModel (see AppModel's
+        // newSplit / gotoSplit / …). Ghostty default keybinds drive these:
+        //   super+d / super+shift+d → new_split
+        //   super+[ / super+]       → goto_split previous/next
+        //   super+alt+arrows        → goto_split directional
+        //   super+ctrl+arrows       → resize_split
+        //   super+ctrl+=            → equalize_splits
+        //   super+shift+enter       → toggle_split_zoom
+        case GHOSTTY_ACTION_NEW_SPLIT:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let direction = action.action.new_split
+            DispatchQueue.main.async {
+                for model in AppModel.all {
+                    model.newSplit(from: view, direction: direction)
+                }
+            }
+            return true
+
+        case GHOSTTY_ACTION_GOTO_SPLIT:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let direction = action.action.goto_split
+            // Must run synchronously so performable keybinds learn whether a
+            // target exists (return false → key event is not consumed).
+            for model in AppModel.all {
+                if model.gotoSplit(from: view, direction: direction) { return true }
+            }
+            return false
+
+        case GHOSTTY_ACTION_RESIZE_SPLIT:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let resize = action.action.resize_split
+            for model in AppModel.all {
+                if model.resizeSplit(from: view, resize: resize) { return true }
+            }
+            return false
+
+        case GHOSTTY_ACTION_EQUALIZE_SPLITS:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async {
+                for model in AppModel.all { model.equalizeSplits(from: view) }
+            }
+            return true
+
+        case GHOSTTY_ACTION_TOGGLE_SPLIT_ZOOM:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            for model in AppModel.all {
+                if model.toggleSplitZoom(from: view) { return true }
+            }
+            return false
+
         default:
             return false
         }

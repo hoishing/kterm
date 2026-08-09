@@ -163,10 +163,12 @@ private struct KtermCommands: Commands {
             Button("New Window") { openWindow(id: "main") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
         }
-        // Close the active tab with the standard ⌘W.
+        // ⌘W matches Ghostty's `close_surface`: close the focused pane (and the
+        // tab only when it was the last pane). The tab-chip × still closes the
+        // whole horizontal tab.
         CommandGroup(replacing: .saveItem) {}
         CommandGroup(after: .newItem) {
-            Button("Close Tab") { model?.closeActiveTab() }
+            Button("Close Surface") { model?.closeFocusedSurface() }
                 .keyboardShortcut("w", modifiers: .command)
 
             Divider()

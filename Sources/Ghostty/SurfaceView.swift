@@ -27,26 +27,32 @@ final class SurfaceView: NSView, NSTextInputClient {
     /// Called on genuine user interaction with the surface (a keystroke or a
     /// mouse press), used to dismiss the notification attention border.
     var onInteraction: (() -> Void)?
+    /// Called when this surface becomes first responder (click / programmatic
+    /// focus). Used to track which split pane is focused inside a tab.
+    var onFocus: (() -> Void)?
 
     // IME / key-input state.
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
-    /// - Parameter inheritFrom: the surface of the tab that triggered this one.
-    ///   When set, the new surface inherits that surface's config — most
+    /// - Parameter inheritFrom: the surface of the tab/pane that triggered this
+    ///   one. When set, the new surface inherits that surface's config — most
     ///   importantly its working directory — via libghostty's
     ///   `ghostty_surface_inherited_config` (honouring the
     ///   `window-inherit-working-directory` setting). `nil` for the first tab,
     ///   which starts from the plain default config.
+    /// - Parameter inheritContext: `TAB` for a new horizontal/vertical tab,
+    ///   `SPLIT` for a new pane (Ghostty distinguishes the two).
     /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
     ///   folder passed to `open -a kterm <dir>` or dropped on the app icon). It
     ///   overrides any inherited cwd. `nil` to keep the default / inherited one.
     init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil,
+         inheritContext: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_TAB,
          workingDirectory: String? = nil) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
         var cfg = parent.map {
-            ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB)
+            ghostty_surface_inherited_config($0, inheritContext)
         } ?? ghostty_surface_config_new()
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
         cfg.platform_tag = GHOSTTY_PLATFORM_MACOS
@@ -122,14 +128,27 @@ final class SurfaceView: NSView, NSTextInputClient {
     }
 
     private func updateSize() {
+        // Prefer the view frame. SwiftUI split/zoom reparents can leave us in a
+        // host whose Auto Layout pass hasn't run yet; callers that already know
+        // the destination size should use `applyContentSize` instead.
+        applyContentSize(bounds.size)
+    }
+
+    /// Push a content size to libghostty. Uses `size` (not `bounds`) so a
+    /// GeometryReader-driven host can size the Metal surface before AppKit
+    /// finishes laying out the NSView — same approach as Ghostty's
+    /// `SurfaceView.sizeDidChange`.
+    func applyContentSize(_ size: CGSize) {
         guard let surface else { return }
-        let backing = convertToBacking(bounds.size)
+        guard size.width > 0, size.height > 0 else { return }
+        let backing = convertToBacking(size)
         guard backing.width > 0, backing.height > 0 else { return }
         ghostty_surface_set_size(surface, UInt32(backing.width), UInt32(backing.height))
     }
 
     override func becomeFirstResponder() -> Bool {
         if let surface { ghostty_surface_set_focus(surface, true) }
+        onFocus?()
         return super.becomeFirstResponder()
     }
 

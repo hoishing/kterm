@@ -1,58 +1,50 @@
 # kterm
 
-> a ghostty-based macOS terminal with vertical and horizontal tabs
+> a ghostty-based macOS terminal with vertical tabs, horizontal tabs, and splits
 
 A minimal native macOS terminal: a SwiftUI app shell around `libghostty` (the
-real GPU-rendered Ghostty core). Two levels of tabs, no splits.
+real GPU-rendered Ghostty core). Two levels of tabs, plus Ghostty-style pane
+splits inside each horizontal tab.
 
 ## Features
 
-- **Two-level tabs** — vertical tabs (sidebar groups) and horizontal tabs
-  (terminals within a group)
-- **Git branch in sidebar** — shows the active tab's branch plus a
-  Starship-style status (`[!?]` dirty/untracked, `[⇡]` ahead, …), refreshed on
-  `cd`/`git checkout` and when the window regains focus
-- **⌘-hold shortcut hints** — hold ⌘ to reveal each sidebar row's ⌘-digit
-  shortcut
-- **Terminal bell notifications** — a terminal bell (BEL / `\a`) or OSC 9/OSC
-  777 raises a macOS notification, so a bell-based cue (e.g. a CLI tool set to
-  notify via the terminal bell) surfaces even when kterm is in the background
-- **In-app notification cues** — a ping marks its tab so you can spot it: a 🔔
-  on its horizontal tab, a dot on its sidebar group, and — if it's the tab on
-  screen — a static border around the content area. They clear when you
-  acknowledge that tab: selecting it, switching kterm back to the foreground, or
-  interacting with its content (a keystroke or click)
-- **Dock bounce when unfocused** — a ping arriving while kterm isn't the active
-  app bounces the dock icon
-- **Smart notification suppression** — the macOS notification and dock bounce
-  fire only when you're not already looking at that exact tab; the tab still
-  gets its in-app 🔔/border so you can catch up after
-- **Click-to-focus notifications** — clicking a desktop notification brings
-  kterm forward and focuses the exact tab that raised it (restoring the window
-  if minimized)
-- **Drag & drop files** — dropping a file (e.g. an image) onto the terminal
-  inserts its shell-escaped path into the buffer, so tools like the Claude Code
-  CLI can pick it up as `[Image #1]`
-- **Open a folder** — `open -a kterm <dir>` (or Finder "Open With" / dropping a
-  folder on the app icon) opens a new tab whose shell starts in that folder,
-  reusing the current window rather than spawning a new one (a cold launch still
-  gets its first window)
+- Two-level tabs: vertical tabs (sidebar groups) and horizontal tabs (split trees within a group)
+- Pane splits: Ghostty-compatible `new_split` / `goto_split` / resize / equalize / zoom inside a horizontal tab
+- Git branch in sidebar: active tab's branch plus Starship-style status (`[!?]` dirty/untracked, `[⇡]` ahead, …), refreshed on `cd`/`git checkout` and when the window regains focus
+- ⌘-hold shortcut hints: hold ⌘ to reveal each sidebar row's ⌘-digit shortcut
+- Terminal bell notifications: BEL (`\a`) or OSC 9/777 raises a macOS notification even when kterm is in the background
+- In-app notification cues: 🔔 on the horizontal tab, a dot on its sidebar group, and a static border on the pane; clear on select, foreground return, or content interaction
+- Dock bounce when unfocused: a ping while kterm isn't active bounces the dock icon
+- Smart notification suppression: OS banner and dock bounce only when you're not already looking at that exact pane; in-app 🔔/border still mark it
+- Click-to-focus notifications: desktop notification tap brings kterm forward and focuses the pane that raised it
+- Drag & drop files: dropping a file onto the terminal inserts its shell-escaped path
+- Open a folder: `open -a kterm <dir>` (or Finder "Open With" / drop on the icon) opens a new tab in that folder in the current window
 
 ## Shortcuts
 
 | Key | Action |
 | --- | --- |
 | ⌘N | New **vertical** tab (a new group in the left sidebar) |
-| ⌘T | New **horizontal** tab (a new terminal in the current group) |
-| ⌘W | Close the active tab |
+| ⌘T | New **horizontal** tab (a new split tree in the current group) |
+| ⌘W | Close the focused **pane** (closes the tab when it was the last pane) |
+| ⌘D | Split pane **right** (Ghostty `new_split:right`) |
+| ⌘⇧D | Split pane **down** (Ghostty `new_split:down`) |
+| ⌘[ / ⌘] | Previous / next pane (Ghostty `goto_split:previous` / `next`) |
+| ⌘⌥↑↓←→ | Focus pane in that direction (`goto_split`) |
+| ⌘⌃↑↓←→ | Resize focused split (`resize_split`, step 10) |
+| ⌘⌃= | Equalize splits |
+| ⌘⇧↩ | Toggle split zoom |
 | ⌘B | Toggle the sidebar |
 | ⌘1…⌘9 | Jump to vertical tab (group) by position |
-| ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab (terminal) |
+| ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab |
 | ⌘⌃[ / ⌘⌃] | Previous / next vertical tab (group) |
 | ⌘Q | Quit (no confirmation) |
 
-Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit
-shortcut as a hint.
+Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit shortcut as a hint.
+
+Split keybinds are Ghostty defaults, handled by libghostty and overridable via
+passthrough `keybind = …` lines in `~/.config/kterm/config`. The tab-chip ×
+closes the whole horizontal tab (all its panes).
 
 ## Configuration
 
@@ -76,14 +68,14 @@ Baked-in defaults (override by setting the same key in your config):
 | `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
 | `kterm-font-ligatures` | `false` | Programming ligatures. Off by default; set `true` to enable. Disabling maps to Ghostty's `font-feature = -calt, -liga, -dlig` |
 
-New tabs inherit the working directory of the tab they were opened from
-(honouring libghostty's `window-inherit-working-directory`).
+New tabs and split panes inherit the working directory of the tab/pane they were
+opened from (honouring libghostty's `window-inherit-working-directory`).
 
 ## Addressing a tab
 
-Each tab's shell gets a `KTERM_TAB_ID` environment variable holding that tab's
-id. Opening `kterm://focus-tab?id=<id>` raises that tab (the mechanism behind
-click-to-focus notifications), so a script can jump you back to its own tab:
+Each pane's shell gets a `KTERM_TAB_ID` environment variable holding that pane's
+id. Opening `kterm://focus-tab?id=<id>` raises that pane (the mechanism behind
+click-to-focus notifications), so a script can jump you back to its own pane:
 
 ```sh
 open "kterm://focus-tab?id=$KTERM_TAB_ID"
@@ -112,8 +104,9 @@ Window
 └─ HStack
    ├─ Sidebar          vertical tabs (groups)        ⌘N adds, ⌘B toggles, resizable
    └─ VStack
-      ├─ TabStrip      horizontal tabs (terminals)   ⌘T adds, ⌘W closes, scrolls on overflow
-      └─ SurfaceView   the active libghostty terminal
+      ├─ TabStrip      horizontal tabs               ⌘T adds; × closes tab
+      └─ SplitTree     panes inside the active tab   ⌘D/⌘⇧D split; ⌘[/⌘] navigate
+         └─ SurfaceView  libghostty terminal (per pane)
 ```
 
-Tab titles track each terminal's working directory (via `GHOSTTY_ACTION_PWD`).
+Tab titles track the focused pane's working directory (via `GHOSTTY_ACTION_PWD`).

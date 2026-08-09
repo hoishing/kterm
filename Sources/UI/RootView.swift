@@ -74,10 +74,18 @@ struct RootView: View {
                     resizeHandle
                 }
 
-                if let term = model.selectedGroup?.selectedTab {
-                    SurfaceContainer(terminal: term)
-                        .id(term.id)
-                        .overlay { AttentionBorder(active: term.showAttention) }
+                if let tab = model.selectedGroup?.selectedTab {
+                    SplitTreeView(
+                        tab: tab,
+                        backgroundColor: terminalColor,
+                        onResize: { node, ratio in
+                            model.resizeSplit(node, to: ratio, in: tab)
+                        },
+                        onEqualize: {
+                            model.equalizeSplits(in: tab)
+                        }
+                    )
+                    .id(tab.id)
                 } else {
                     emptyState
                 }
@@ -259,46 +267,109 @@ struct WindowConfigurator: NSViewRepresentable {
 }
 
 /// Hosts a terminal's persistent `SurfaceView` without recreating it on tab
-/// switches (which would kill the shell session). The container reparents the
-/// surface view, which stays owned by the `Terminal` model object.
-struct SurfaceContainer: NSViewRepresentable {
+/// switches or split-tree rebuilds (which would kill the shell session).
+///
+/// The `SurfaceView` is owned by the `Terminal` model and reparented into this
+/// representable's host view. Size is driven by a `GeometryReader` so libghostty
+/// gets the destination size even when AppKit hasn't finished laying out the
+/// new host (same approach as Ghostty's `SurfaceRepresentable`).
+///
+/// **Ownership rule:** only `makeNSView` (or an orphan reclaim) may attach the
+/// surface. During SwiftUI identity transitions the old and new representable
+/// briefly coexist; if `updateNSView` re-attached whenever
+/// `superview !== host`, the dying host would steal the surface back from the
+/// new one and leave a blank pane after zoom / close-sibling / nested split.
+struct SurfaceContainer: View {
     let terminal: Terminal
+    var wantsFocus: Bool = false
 
-    func makeNSView(context: Context) -> NSView {
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.setAccessibilityElement(true)
-        container.setAccessibilityIdentifier("terminal.surface")
-        container.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
-        attach(terminal.surfaceView, to: container)
-        return container
+    var body: some View {
+        GeometryReader { geo in
+            SurfaceRepresentable(
+                terminal: terminal,
+                size: geo.size,
+                wantsFocus: wantsFocus
+            )
+        }
+    }
+}
+
+private struct SurfaceRepresentable: NSViewRepresentable {
+    let terminal: Terminal
+    let size: CGSize
+    let wantsFocus: Bool
+
+    func makeNSView(context: Context) -> SurfaceHostView {
+        let host = SurfaceHostView()
+        host.setAccessibilityElement(true)
+        host.setAccessibilityIdentifier("terminal.surface")
+        host.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
+        attach(terminal.surfaceView, to: host, size: size)
+        return host
     }
 
-    func updateNSView(_ container: NSView, context: Context) {
+    func updateNSView(_ host: SurfaceHostView, context: Context) {
         let surface = terminal.surfaceView
-        if surface.superview !== container {
-            surface.removeFromSuperview()
-            attach(surface, to: container)
+
+        if surface.superview === host {
+            host.apply(size: size, to: surface)
+        } else if surface.superview == nil {
+            // Host was destroyed without a replacement taking ownership (e.g.
+            // tab close/reopen edge cases). Reclaim the orphaned surface.
+            attach(surface, to: host, size: size)
         }
-        // Mirror the attention-border state onto the container's accessibility
-        // value ("attention"/"idle") so UI tests can observe the notification
-        // border appear and clear. `RootView`'s body reads `showAttention` (via
+        // else: another live host owns this surface — do not steal it back.
+
+        // Mirror the attention-border state onto the host's accessibility value
+        // ("attention"/"idle") so UI tests can observe the notification border
+        // appear and clear. `RootView`'s body reads `showAttention` (via
         // `AttentionBorder`), so a change re-runs this update.
-        container.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
-        DispatchQueue.main.async {
-            surface.window?.makeFirstResponder(surface)
+        host.setAccessibilityValue(terminal.showAttention ? "attention" : "idle")
+
+        // Only the focused pane should take first responder, and only once it
+        // actually owns the surface.
+        if wantsFocus, surface.superview === host {
+            DispatchQueue.main.async {
+                guard surface.superview === host else { return }
+                surface.window?.makeFirstResponder(surface)
+            }
         }
     }
 
-    private func attach(_ surface: SurfaceView, to container: NSView) {
-        surface.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(surface)
-        NSLayoutConstraint.activate([
-            surface.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            surface.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            surface.topAnchor.constraint(equalTo: container.topAnchor),
-            surface.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
+    private func attach(_ surface: SurfaceView, to host: SurfaceHostView, size: CGSize) {
+        surface.removeFromSuperview()
+        // Frame-based layout: Auto Layout against a SwiftUI-managed host fights
+        // GeometryReader size updates after reparent.
+        surface.translatesAutoresizingMaskIntoConstraints = true
+        surface.autoresizingMask = [.width, .height]
+        host.addSubview(surface)
+        host.apply(size: size, to: surface)
+    }
+}
+
+/// NSView host that keeps its `SurfaceView` sized to the SwiftUI proposal.
+/// The host frame itself is owned by SwiftUI; we only size the reparented surface.
+final class SurfaceHostView: NSView {
+    func apply(size: CGSize, to surface: SurfaceView) {
+        guard size.width > 0, size.height > 0 else { return }
+        let rect = CGRect(origin: .zero, size: size)
+        if surface.frame != rect {
+            surface.frame = rect
+        }
+        // Always push size to libghostty. `setFrame` is a no-op when the frame
+        // is unchanged, so a surface that previously applied 0×0 would never
+        // recover via `setFrameSize` alone.
+        surface.applyContentSize(size)
+    }
+
+    override func layout() {
+        super.layout()
+        guard let surface = subviews.first as? SurfaceView else { return }
+        // Fall back to the host bounds once SwiftUI has laid us out — covers
+        // the case where GeometryReader reported 0 during the first pass.
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+        apply(size: size, to: surface)
     }
 }
 
@@ -327,15 +398,15 @@ struct DockBounceProbe: NSViewRepresentable {
     }
 }
 
-/// A static border around the content area, shown while the on-screen terminal
-/// has an unacknowledged notification. It stays put (unlike a flash); it's
-/// dismissed when the tab is acknowledged (see `Terminal.showAttention`). The
-/// look copies cmux's persistent notification ring
+/// A static border around a terminal pane, shown while that terminal has an
+/// unacknowledged notification. It stays put (unlike a flash); it's dismissed
+/// when the tab is acknowledged (see `Terminal.showAttention`). The look copies
+/// cmux's persistent notification ring
 /// (`WorkspaceAttentionCoordinator.notificationRingStyle` /
 /// `PanelOverlayRingMetrics`): a systemBlue stroke with a soft glow, inset from
 /// the edge. A brief fade in/out keeps the appearance and dismissal smooth
 /// without pulsing.
-private struct AttentionBorder: View {
+struct AttentionBorder: View {
     let active: Bool
 
     /// cmux uses `NSColor.systemBlue` for the notification ring's stroke/glow.
