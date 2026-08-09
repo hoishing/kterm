@@ -18,15 +18,24 @@ struct TabStrip: View {
     private let trailingPad: CGFloat = 8
     private let spacing: CGFloat = 4
     private let plusWidth: CGFloat = 28
+    /// Matches Ghostty's 20×20 reset-zoom control, with a little hit padding.
+    private let resetZoomWidth: CGFloat = 28
 
     /// Measured width of the whole strip (set via a background GeometryReader).
     @State private var stripWidth: CGFloat = 0
+
+    /// Selected tab has a maximized pane → show Ghostty's reset-zoom control.
+    private var zoomedTab: TerminalTab? {
+        guard let tab = group.selectedTab, tab.isZoomed else { return nil }
+        return tab
+    }
 
     private var tabWidth: CGFloat {
         let count = group.tabs.count
         guard count > 0 else { return minTabWidth }
         let gaps = CGFloat(count - 1) * spacing
-        let reserved = leadingPad + trailingPad + spacing + plusWidth
+        let zoomReserved = zoomedTab == nil ? 0 : spacing + resetZoomWidth
+        let reserved = leadingPad + trailingPad + spacing + plusWidth + zoomReserved
         let usable = max(stripWidth - reserved - gaps, 0)
         return max(usable / CGFloat(count), minTabWidth)
     }
@@ -56,6 +65,23 @@ struct TabStrip: View {
             .buttonStyle(.plain)
             .help("New horizontal tab (⌘T)")
             .accessibilityIdentifier("tabstrip.newTab")
+
+            // Ghostty titlebar Reset Zoom: only while a pane is maximized.
+            if let tab = zoomedTab {
+                Button(action: { model.resetSplitZoom(in: tab) }) {
+                    Image("ResetZoom")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .frame(width: resetZoomWidth, height: 20)
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Reset Split Zoom")
+                .accessibilityIdentifier("tabstrip.resetZoom")
+                .accessibilityLabel("Reset Split Zoom")
+            }
         }
         .padding(.leading, leadingPad)
         .padding(.trailing, trailingPad)

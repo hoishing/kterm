@@ -102,6 +102,9 @@ final class TerminalTab: Identifiable {
 
     /// Any pane has an unread notification → the chip shows a 🔔.
     var hasUnread: Bool { terminals.contains { $0.hasUnread } }
+
+    /// A pane is zoomed to fill this tab (Ghostty `toggle_split_zoom`).
+    var isZoomed: Bool { tree.zoomed != nil }
 }
 
 /// A vertical (sidebar) tab: a named group of horizontal tabs.
@@ -521,6 +524,12 @@ final class AppModel {
         }
         focus(source, in: tab)
         return true
+    }
+
+    /// Clear zoom on a tab (titlebar Reset Zoom button).
+    func resetSplitZoom(in tab: TerminalTab) {
+        guard tab.tree.zoomed != nil else { return }
+        tab.tree = SplitTree(root: tab.tree.root, zoomed: nil)
     }
 
     /// Close a single pane (shell exited, or Ghostty `close_surface` / ⌘W).
