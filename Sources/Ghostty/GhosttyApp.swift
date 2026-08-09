@@ -1,4 +1,6 @@
 import AppKit
+import SwiftUI
+import Observation
 import GhosttyKit
 
 /// Owns the single global `ghostty_app_t` and the runtime callbacks libghostty
@@ -8,15 +10,35 @@ import GhosttyKit
 /// Ghostty's own macOS app exposes through its `Ghostty` Swift package. We only
 /// wire up what kterm needs: app lifecycle, the wakeup tick, clipboard, and
 /// surface close/title callbacks.
+@Observable
 @MainActor
 final class GhosttyApp {
     /// The libghostty app handle. `nil` only if initialization failed.
-    private(set) var app: ghostty_app_t?
+    /// `nonisolated(unsafe)`: C pointer, only ever touched on the main thread.
+    private(set) nonisolated(unsafe) var app: ghostty_app_t?
 
-    /// The loaded configuration handle, kept so surfaces can inherit from it.
-    private(set) var config: ghostty_config_t?
+    /// The loaded libghostty configuration handle, kept so surfaces can
+    /// inherit from it. Replaced on config reload (see `GHOSTTY_ACTION_CONFIG_CHANGE`).
+    /// `nonisolated(unsafe)`: C pointer, only ever touched on the main thread.
+    private(set) nonisolated(unsafe) var config: ghostty_config_t?
+
+    /// Replace the app-level config handle, freeing the old one. Called from
+    /// the `GHOSTTY_ACTION_CONFIG_CHANGE` callback; libghostty already cloned
+    /// the incoming config for the app, so we take ownership of our clone.
+    func setConfig(_ cfg: ghostty_config_t?) {
+        let old = config
+        config = cfg
+        if let old { ghostty_config_free(old) }
+    }
+
+    /// kterm's shell settings (sidebar width, tab placement, UI font, …).
+    /// Replaced on `reloadConfig()`; views read it reactively.
+    var ktermConfig: KtermConfig
 
     init(config: KtermConfig) {
+        self.ktermConfig = config
+        // Resolve chrome font and shell settings before any window body runs.
+        applyShellSettings(config)
         // Point libghostty at our bundled resources (Contents/Resources/ghostty)
         // so it can inject shell integration into the shell. This is what makes
         // the shell emit OSC 7 (working directory) and title reports. Must be set
@@ -84,6 +106,34 @@ final class GhosttyApp {
                        green: Double(color.g) / 255,
                        blue: Double(color.b) / 255,
                        alpha: 1)
+    }
+
+    /// Reload configuration from disk and propagate it to libghostty and the
+    /// app shell. Mirrors Ghostty's `reload_config` action (⌘⇧,).
+    ///
+    /// libghostty clones the config for the app internally on
+    /// `GHOSTTY_ACTION_CONFIG_CHANGE`, so we can free our copy after the call.
+    /// `self.config` is replaced when that action fires (see `configChange`).
+    func reloadConfig() {
+        let kterm = KtermConfig.load()
+        let cfg = ghostty_config_new()
+        kterm.applyToGhostty(cfg)
+        ghostty_config_finalize(cfg)
+
+        if let app {
+            ghostty_app_update_config(app, cfg)
+        }
+        // Free our temporary; libghostty already cloned it for the app.
+        ghostty_config_free(cfg)
+
+        // Apply shell settings immediately (font, tab placement, sidebar width).
+        applyShellSettings(kterm)
+    }
+
+    /// Apply the kterm-only shell settings. Called on launch and reload.
+    private func applyShellSettings(_ config: KtermConfig) {
+        ktermConfig = config
+        KtermUIFont.configure(family: config.uiFontFamily)
     }
 
     /// Pump libghostty. Safe to call any time on the main thread.
@@ -160,6 +210,33 @@ final class GhosttyApp {
                   let ud = ghostty_surface_userdata(surface) else { return false }
             let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
             DispatchQueue.main.async { view.onBell?() }
+            return true
+
+        // libghostty's built-in ⌘⇧, keybind surfaces here as an app-targeted
+        // reload. Handle it so the menu item and the keybind share one path.
+        case GHOSTTY_ACTION_RELOAD_CONFIG:
+            guard let appUd = ghostty_app_userdata(app) else { return false }
+            let ghostty = Unmanaged<GhosttyApp>.fromOpaque(appUd).takeUnretainedValue()
+            let soft = action.action.reload_config.soft
+            DispatchQueue.main.async {
+                if soft {
+                    ghostty.applyShellSettings(KtermConfig.load())
+                } else {
+                    ghostty.reloadConfig()
+                }
+            }
+            return true
+
+        // libghostty clones the config for the app internally (see
+        // performPreAction in embedded.zig); we mirror it into `self.config`
+        // so `backgroundColor` and inherited-config surfaces see the update.
+        case GHOSTTY_ACTION_CONFIG_CHANGE:
+            guard let appUd = ghostty_app_userdata(app) else { return false }
+            let ghostty = Unmanaged<GhosttyApp>.fromOpaque(appUd).takeUnretainedValue()
+            let cloned = ghostty_config_clone(action.action.config_change.config)
+            DispatchQueue.main.async {
+                ghostty.setConfig(cloned)
+            }
             return true
 
         // Split actions are handled by the owning AppModel (see AppModel's

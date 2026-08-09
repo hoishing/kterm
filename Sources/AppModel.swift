@@ -149,8 +149,11 @@ final class AppModel {
 
     let ghostty: GhosttyApp
 
-    /// Where a new tab lands relative to the current one (`kterm-new-tab-position`).
-    let newTabPosition: KtermConfig.NewTabPosition
+    /// Where a new tab lands relative to the current one. Read live from
+    /// `ghostty.ktermConfig` so config reloads take effect immediately.
+    private var newTabPosition: KtermConfig.NewTabPosition {
+        ghostty.ktermConfig.newTabPosition
+    }
 
     /// This model's NSWindow, captured once it's on screen (see
     /// `WindowConfigurator`). Used to raise the window.
@@ -180,9 +183,8 @@ final class AppModel {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
 
-    init(ghostty: GhosttyApp, newTabPosition: KtermConfig.NewTabPosition = .afterCurrent) {
+    init(ghostty: GhosttyApp) {
         self.ghostty = ghostty
-        self.newTabPosition = newTabPosition
         Self.registry.removeAll { $0.model == nil }
         Self.registry.append(Box(self))
         // Start with one vertical tab containing one terminal. On a cold launch

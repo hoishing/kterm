@@ -8,9 +8,13 @@ struct RootView: View {
     let model: AppModel
 
     /// Sidebar width; seeded from config and adjustable by dragging its edge.
-    @State private var sidebarWidth: CGFloat
+    /// Re-seeded from `ghostty.ktermConfig` when the config is reloaded.
+    @State private var sidebarWidth: CGFloat = 160
     /// Sidebar width captured at the start of a resize drag.
     @State private var dragStartWidth: CGFloat?
+    /// Tracks the last applied config width so reload re-seeds only when the
+    /// config value actually changed (a drag-resize shouldn't be clobbered).
+    @State private var lastConfigWidth: CGFloat = 160
 
     /// Titlebar height; matches `TabStrip`'s bar height.
     private let titlebarHeight: CGFloat = 38
@@ -19,9 +23,8 @@ struct RootView: View {
     private let minSidebar: CGFloat = 120
     private let maxSidebar: CGFloat = 480
 
-    init(model: AppModel, sidebarWidth: CGFloat) {
+    init(model: AppModel) {
         self.model = model
-        _sidebarWidth = State(initialValue: sidebarWidth)
     }
 
     /// Left column width in the titlebar row: the sidebar when shown, otherwise
@@ -99,6 +102,18 @@ struct RootView: View {
         .overlay(alignment: .topLeading) {
             DockBounceProbe(count: model.dockAttentionRequests).frame(width: 1, height: 1)
         }
+        .onAppear { syncSidebarWidth(force: true) }
+        .onChange(of: model.ghostty.ktermConfig.sidebarWidth) { syncSidebarWidth() }
+    }
+
+    /// Re-seed the sidebar width from config when the configured value
+    /// changes (e.g. after ⌘⇧, reload), without clobbering a drag-resize.
+    /// `force` applies unconditionally (initial appearance).
+    private func syncSidebarWidth(force: Bool = false) {
+        let w = model.ghostty.ktermConfig.sidebarWidth
+        guard force || w != lastConfigWidth else { return }
+        lastConfigWidth = w
+        sidebarWidth = min(max(w, minSidebar), maxSidebar)
     }
 
     /// A UI-test-only probe exposing the effective `kterm-font-ligatures` value,
@@ -112,7 +127,7 @@ struct RootView: View {
             // The state is encoded in the identifier (`.on`/`.off`) rather than
             // an accessibility value: XCUITest doesn't surface `.value` for a
             // plain non-control probe element, but it does surface identifiers.
-            let cfg = KtermConfig.load()
+            let cfg = model.ghostty.ktermConfig
             let liga = cfg.fontLigatures ? "on" : "off"
             // Encode the family in the identifier so UI tests can assert the
             // parsed `kterm-ui-font-family` without reaching into Swift state.

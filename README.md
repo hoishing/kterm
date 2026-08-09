@@ -74,6 +74,10 @@ Baked-in defaults (override by setting the same key in your config):
 New tabs and split panes inherit the working directory of the tab/pane they were
 opened from (honouring libghostty's `window-inherit-working-directory`).
 
+**Reload Configuration** (⌘⇧, in the app menu) re-reads `~/.config/kterm/config`
+and applies it live: terminal settings (font, theme, …) via libghostty, plus
+kterm's shell settings (UI font, sidebar width, new-tab position).
+
 ## Addressing a tab
 
 Each pane's shell gets a `KTERM_TAB_ID` environment variable holding that pane's

@@ -75,29 +75,33 @@ extension FocusedValues {
     }
 
     private struct AppModelKey: FocusedValueKey { typealias Value = AppModel }
+
+    /// The shared libghostty app, exposed so the app menu can reload config
+    /// regardless of which window is key.
+    var ghostty: GhosttyApp? {
+        get { self[GhosttyKey.self] }
+        set { self[GhosttyKey.self] = newValue }
+    }
+
+    private struct GhosttyKey: FocusedValueKey { typealias Value = GhosttyApp }
 }
 
 @main
 struct KtermApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let config: KtermConfig
-    // One libghostty app for the whole process (ghostty_init runs once); every
-    // window shares it. Per-window state lives in a fresh `AppModel` (see
-    // `WindowRoot`).
+    /// The shared libghostty app. Created once at launch; every window
+    /// reads shell settings from `ghostty.ktermConfig` reactively.
     private let ghostty: GhosttyApp
 
     init() {
-        let config = KtermConfig.load()
-        self.config = config
-        // Resolve chrome font before any window body runs.
-        KtermUIFont.configure(family: config.uiFontFamily)
-        self.ghostty = GhosttyApp(config: config)
+        let ghostty = GhosttyApp(config: KtermConfig.load())
+        self.ghostty = ghostty
     }
 
     var body: some Scene {
         // A WindowGroup (not a single Window) so ⌘⇧N can open more windows.
         WindowGroup("kterm", id: "main") {
-            WindowRoot(ghostty: ghostty, config: config)
+            WindowRoot(ghostty: ghostty)
         }
         // Hardcodes Ghostty's `macos-titlebar-style = tabs`: hide the system
         // titlebar so the tab strip (RootView) fills it edge to edge.
@@ -112,7 +116,6 @@ struct KtermApp: App {
 /// `GhosttyApp`.
 private struct WindowRoot: View {
     let ghostty: GhosttyApp
-    let config: KtermConfig
     @State private var model: AppModel?
 
     var body: some View {
@@ -131,7 +134,7 @@ private struct WindowRoot: View {
                 )
                 .font(KtermUIFont.font(size: 15))
             } else if let model {
-                RootView(model: model, sidebarWidth: config.sidebarWidth)
+                RootView(model: model)
                     // Make this window's model the target of the menu commands
                     // whenever it's the key window.
                     .focusedSceneValue(\.appModel, model)
@@ -140,9 +143,10 @@ private struct WindowRoot: View {
                     .font(KtermUIFont.font(size: 13))
             }
         }
+        .focusedSceneValue(\.ghostty, ghostty)
         .onAppear {
             if model == nil, ghostty.app != nil {
-                model = AppModel(ghostty: ghostty, newTabPosition: config.newTabPosition)
+                model = AppModel(ghostty: ghostty)
             }
         }
     }
@@ -152,6 +156,7 @@ private struct WindowRoot: View {
 /// `@FocusedValue`), so tab/sidebar/split shortcuts act on the front window.
 private struct KtermCommands: Commands {
     @FocusedValue(\.appModel) private var model: AppModel?
+    @FocusedValue(\.ghostty) private var ghostty: GhosttyApp?
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -171,6 +176,14 @@ private struct KtermCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
             Button("New Horizontal Tab") { model?.newHorizontalTab() }
                 .keyboardShortcut("t", modifiers: .command)
+        }
+
+        // Ghostty's Reload Configuration (⌘⇧,). libghostty's built-in keybind
+        // reaches the same handler via GHOSTTY_ACTION_RELOAD_CONFIG; the menu
+        // item claims the key so the menu bar shows it.
+        CommandGroup(replacing: .appSettings) {
+            Button("Reload Configuration") { ghostty?.reloadConfig() }
+                .keyboardShortcut(",", modifiers: [.command, .shift])
         }
 
         // ⌘W matches Ghostty's `close_surface`: close the focused pane (and the
