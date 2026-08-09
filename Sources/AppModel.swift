@@ -153,13 +153,13 @@ final class AppModel {
     let newTabPosition: KtermConfig.NewTabPosition
 
     /// This model's NSWindow, captured once it's on screen (see
-    /// `WindowConfigurator`). Used to raise/cycle windows.
+    /// `WindowConfigurator`). Used to raise the window.
     weak var window: NSWindow?
 
     /// Every live window's model, oldest first. Weakly held so a closed
-    /// window's model drops out on its own. Lets ⌘` cycle windows and lets a
-    /// notification tap reach whichever window owns the tab (`AppModel` is a
-    /// per-window state, one per open window).
+    /// window's model drops out on its own. Lets a notification tap reach
+    /// whichever window owns the tab (`AppModel` is a per-window state, one
+    /// per open window).
     private final class Box { weak var model: AppModel?; init(_ m: AppModel) { model = m } }
     private static var registry: [Box] = []
     static var all: [AppModel] { registry.compactMap(\.model) }
@@ -309,19 +309,6 @@ final class AppModel {
         else { return }
         let next = (cur + delta + groups.count) % groups.count
         select(group: groups[next])
-    }
-
-    /// ⌘` — cycle key focus through kterm's windows (wrapping). No-op with
-    /// fewer than two windows on screen.
-    static func cycleWindow() {
-        let models = all.filter { $0.window != nil }
-        guard models.count > 1 else { return }
-        let key = NSApp.keyWindow
-        let idx = models.firstIndex { $0.window === key } ?? 0
-        let next = models[(idx + 1) % models.count]
-        NSApp.activate(ignoringOtherApps: true)
-        next.window?.makeKeyAndOrderFront(nil)
-        next.focusSelected()
     }
 
     /// Open `path` as a new vertical tab in the front kterm window, bringing the
@@ -530,6 +517,43 @@ final class AppModel {
     func resetSplitZoom(in tab: TerminalTab) {
         guard tab.tree.zoomed != nil else { return }
         tab.tree = SplitTree(root: tab.tree.root, zoomed: nil)
+    }
+
+    // MARK: - Splits (menu / focused-pane entry points)
+
+    /// Focused pane of the selected horizontal tab, if any.
+    private var focusedSurfaceView: SurfaceView? {
+        selectedGroup?.selectedTab?.focusedTerminal?.surfaceView
+    }
+
+    /// Menu/command wrappers around the Ghostty-action overloads — operate on
+    /// the currently focused pane of the key window.
+    func newSplit(_ direction: ghostty_action_split_direction_e) {
+        guard let surfaceView = focusedSurfaceView else { return }
+        newSplit(from: surfaceView, direction: direction)
+    }
+
+    @discardableResult
+    func gotoSplit(_ direction: ghostty_action_goto_split_e) -> Bool {
+        guard let surfaceView = focusedSurfaceView else { return false }
+        return gotoSplit(from: surfaceView, direction: direction)
+    }
+
+    @discardableResult
+    func resizeSplit(direction: ghostty_action_resize_split_direction_e, amount: UInt16 = 10) -> Bool {
+        guard let surfaceView = focusedSurfaceView else { return false }
+        return resizeSplit(from: surfaceView, resize: .init(amount: amount, direction: direction))
+    }
+
+    func equalizeSplits() {
+        guard let tab = selectedGroup?.selectedTab else { return }
+        equalizeSplits(in: tab)
+    }
+
+    @discardableResult
+    func toggleSplitZoom() -> Bool {
+        guard let surfaceView = focusedSurfaceView else { return false }
+        return toggleSplitZoom(from: surfaceView)
     }
 
     /// Close a single pane (shell exited, or Ghostty `close_surface` / ⌘W).

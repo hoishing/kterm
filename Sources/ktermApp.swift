@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import GhosttyKit
 
 /// Hardcodes Ghostty's `quit-after-last-window-closed = true`: terminate the
 /// process once the last window closes instead of lingering in the dock.
@@ -141,7 +142,7 @@ private struct WindowRoot: View {
 }
 
 /// kterm's menu commands. They target the key window's `AppModel` (via
-/// `@FocusedValue`), so tab/sidebar shortcuts act on the front window.
+/// `@FocusedValue`), so tab/sidebar/split shortcuts act on the front window.
 private struct KtermCommands: Commands {
     @FocusedValue(\.appModel) private var model: AppModel?
     @Environment(\.openWindow) private var openWindow
@@ -153,16 +154,18 @@ private struct KtermCommands: Commands {
         // so this closure is available when the folder-open arrives.
         let openWindow = openWindow
         let _ = (AppModel.openNewWindow = { openWindow(id: "main") })
-        // Replace the default New Window (⌘N) with kterm's tab commands, plus
-        // ⌘⇧N to open a new window.
+
+        // Replace the default New Window (⌘N) with kterm's tab commands.
+        // There is no New Window menu item/hotkey — multi-window is not a
+        // primary workflow; cold `open -a kterm <dir>` still opens one via
+        // `AppModel.openNewWindow` above.
         CommandGroup(replacing: .newItem) {
             Button("New Vertical Tab") { model?.newVerticalTab() }
                 .keyboardShortcut("n", modifiers: .command)
             Button("New Horizontal Tab") { model?.newHorizontalTab() }
                 .keyboardShortcut("t", modifiers: .command)
-            Button("New Window") { openWindow(id: "main") }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
         }
+
         // ⌘W matches Ghostty's `close_surface`: close the focused pane (and the
         // tab only when it was the last pane). The tab-chip × still closes the
         // whole horizontal tab.
@@ -170,6 +173,18 @@ private struct KtermCommands: Commands {
         CommandGroup(after: .newItem) {
             Button("Close Surface") { model?.closeFocusedSurface() }
                 .keyboardShortcut("w", modifiers: .command)
+
+            Divider()
+
+            // Pane splits — same labels/shortcuts as Ghostty's File menu.
+            // Menu shortcuts intercept the keys before libghostty; the handlers
+            // call the same AppModel paths Ghostty actions use.
+            Button("Split Right") { model?.newSplit(GHOSTTY_SPLIT_DIRECTION_RIGHT) }
+                .keyboardShortcut("d", modifiers: .command)
+            Button("Split Left") { model?.newSplit(GHOSTTY_SPLIT_DIRECTION_LEFT) }
+            Button("Split Down") { model?.newSplit(GHOSTTY_SPLIT_DIRECTION_DOWN) }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+            Button("Split Up") { model?.newSplit(GHOSTTY_SPLIT_DIRECTION_UP) }
 
             Divider()
 
@@ -196,15 +211,48 @@ private struct KtermCommands: Commands {
                 .keyboardShortcut("]", modifiers: [.command, .shift])
 
             // ⌘⌃[ / ⌘⌃] — previous/next vertical tab (group).
+            // ⌘` is an alias for next vertical tab (cycle).
             Button("Previous Vertical Tab") { model?.selectPrevVerticalTab() }
                 .keyboardShortcut("[", modifiers: [.command, .control])
             Button("Next Vertical Tab") { model?.selectNextVerticalTab() }
                 .keyboardShortcut("]", modifiers: [.command, .control])
-        }
-        // ⌘` — cycle key focus through kterm's windows.
-        CommandGroup(after: .windowList) {
-            Button("Cycle Windows") { AppModel.cycleWindow() }
+            Button("Cycle Vertical Tabs") { model?.selectNextVerticalTab() }
                 .keyboardShortcut("`", modifiers: .command)
+        }
+
+        // Pane navigation / zoom / resize — same labels as Ghostty's Window menu.
+        CommandGroup(after: .windowList) {
+            Button("Zoom Split") { model?.toggleSplitZoom() }
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
+
+            Button("Select Previous Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_PREVIOUS) }
+                .keyboardShortcut("[", modifiers: .command)
+            Button("Select Next Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_NEXT) }
+                .keyboardShortcut("]", modifiers: .command)
+
+            Menu("Select Split") {
+                Button("Select Split Above") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_UP) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                Button("Select Split Below") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_DOWN) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                Button("Select Split Left") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_LEFT) }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                Button("Select Split Right") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_RIGHT) }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+            }
+
+            Menu("Resize Split") {
+                Button("Equalize Splits") { model?.equalizeSplits() }
+                    .keyboardShortcut("=", modifiers: [.command, .control])
+                Button("Move Divider Up") { model?.resizeSplit(direction: GHOSTTY_RESIZE_SPLIT_UP) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .control])
+                Button("Move Divider Down") { model?.resizeSplit(direction: GHOSTTY_RESIZE_SPLIT_DOWN) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .control])
+                Button("Move Divider Left") { model?.resizeSplit(direction: GHOSTTY_RESIZE_SPLIT_LEFT) }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .control])
+                Button("Move Divider Right") { model?.resizeSplit(direction: GHOSTTY_RESIZE_SPLIT_RIGHT) }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .control])
+            }
         }
     }
 }
