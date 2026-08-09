@@ -38,13 +38,15 @@ splits inside each horizontal tab.
 | ⌘1…⌘9 | Jump to vertical tab (group) by position |
 | ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab |
 | ⌘⌃[ / ⌘⌃] | Previous / next vertical tab (group) |
+| ⌘` | Cycle vertical tabs (alias of next vertical tab) |
 | ⌘Q | Quit (no confirmation) |
 
 Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit shortcut as a hint.
 
-Split keybinds are Ghostty defaults, handled by libghostty and overridable via
-passthrough `keybind = …` lines in `~/.config/kterm/config`. The tab-chip ×
-closes the whole horizontal tab (all its panes).
+Split actions appear in the app menu (File / Window), with Ghostty-default
+shortcuts. libghostty still accepts the same binds via passthrough
+`keybind = …` lines in `~/.config/kterm/config` when the menu does not claim
+the key. The tab-chip × closes the whole horizontal tab (all its panes).
 
 ## Configuration
 
