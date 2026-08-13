@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Build GhosttyKit.xcframework from the pinned `ghostty/` submodule.
-# Downloads the exact Zig toolchain ghostty requires (0.15.2) into .zig-toolchain/
-# if a matching `zig` is not already on PATH, then emits the universal xcframework.
+# Downloads the exact Zig toolchain ghostty requires (0.16.0) into .zig-toolchain/
+# if a matching `zig` is not already on PATH, then emits the native xcframework.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-ZIG_VERSION="0.15.2"   # must match ghostty/build.zig.zon minimum_zig_version
+ZIG_VERSION="0.16.0"   # must match ghostty/build.zig.zon minimum_zig_version
 ZIG_DIR="$REPO_ROOT/.zig-toolchain"
 
 # --- ensure submodule is checked out ---
@@ -16,7 +16,7 @@ if [ ! -f "ghostty/build.zig" ]; then
   git submodule update --init ghostty
 fi
 
-# --- resolve a Zig 0.15.2 binary ---
+# --- resolve a Zig 0.16.0 binary ---
 ZIG_BIN=""
 if command -v zig >/dev/null 2>&1 && [ "$(zig version)" = "$ZIG_VERSION" ]; then
   ZIG_BIN="$(command -v zig)"
@@ -41,8 +41,8 @@ else
 fi
 echo "==> Using zig: $ZIG_BIN ($("$ZIG_BIN" version))"
 
-# --- pick an SDK Zig 0.15.2 can parse ---
-# macOS 26 (Tahoe) ships .tbd files that Zig 0.15.2 cannot parse, so every libc
+# --- pick an SDK Zig 0.16.0 can parse ---
+# macOS 26 (Tahoe) ships .tbd files that Zig 0.16.0 cannot parse, so every libc
 # symbol comes back undefined ("undefined symbol: _waitpid", etc.) — even when
 # compiling Zig's own build runner. Zig locates the SDK by shelling out to
 # `xcrun --show-sdk-path`, and it ignores SDKROOT / --sysroot for the build
@@ -73,58 +73,6 @@ else
   echo "==> WARNING: no macOS 15 SDK found; building against default SDK (may fail on macOS 26)." >&2
 fi
 
-# Apple's `libtool -static` SILENTLY DROPS members when merging multiple
-# archives that share member basenames (e.g. several deps ship a `base64.o` /
-# `compiler_rt.o`). Ghostty's xcframework step merges ~15 archives that way, so
-# the resulting libghostty-fat.a comes out missing the main object and many
-# dependencies. We shadow `libtool` to instead explode every input archive into
-# uniquely-named objects and re-archive those, which preserves everything. It
-# also stashes the combined lib at $KTERM_FATLIB_DEST so we can build the
-# xcframework ourselves below (Zig's own xcframework step is entangled with the
-# Ghostty.app build, which fails to link in this toolchain).
-FATLIB_DEST="$REPO_ROOT/.ghostty-build/libghostty-fat.a"
-rm -rf "$REPO_ROOT/.ghostty-build" && mkdir -p "$REPO_ROOT/.ghostty-build"
-cat > "$SHIM_DIR/libtool" <<EOF
-#!/bin/bash
-KTERM_FATLIB_DEST="$FATLIB_DEST"
-EOF
-cat >> "$SHIM_DIR/libtool" <<'EOF'
-if [ "$1" = "-static" ]; then
-  base="$PWD"
-  shift
-  out=""; inputs=()
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      -o) out="$2"; shift 2 ;;
-      *.a) inputs+=("$1"); shift ;;
-      *) shift ;;   # ignore other flags
-    esac
-  done
-  if [ -n "$out" ] && [ "${#inputs[@]}" -gt 0 ]; then
-    tmp="$(mktemp -d)"; mkdir -p "$tmp/obj"; i=0
-    for a in "${inputs[@]}"; do
-      case "$a" in /*) abs="$a" ;; *) abs="$base/$a" ;; esac
-      [ -f "$abs" ] || continue
-      i=$((i+1)); d="$tmp/ex$i"; mkdir -p "$d"
-      ( cd "$d" && ar x "$abs" 2>/dev/null && chmod +r ./* 2>/dev/null; rm -f __.SYMDEF* )
-      pre="$(basename "$a" .a)"
-      for o in "$d"/*.o; do
-        [ -f "$o" ] && mv "$o" "$tmp/obj/${pre}__$(basename "$o")"
-      done
-    done
-    /usr/bin/libtool -static -o "$out" "$tmp/obj"/*.o
-    rc=$?
-    # Stash the fully-combined ghostty lib for the script to package.
-    if [ $rc -eq 0 ] && [ "$(basename "$out")" = "libghostty-fat.a" ] && [ -n "$KTERM_FATLIB_DEST" ]; then
-      cp "$out" "$KTERM_FATLIB_DEST"
-    fi
-    rm -rf "$tmp"; exit $rc
-  fi
-fi
-exec /usr/bin/libtool "$@"
-EOF
-chmod +x "$SHIM_DIR/libtool"
-
 # --- ensure the Metal Toolchain is installed ---
 # Ghostty compiles Metal shaders (.metal -> .metallib). On Xcode 26 the Metal
 # Toolchain is a separate, downloadable component; without it the build fails
@@ -134,37 +82,39 @@ if ! /usr/bin/xcrun -f metal >/dev/null 2>&1; then
   /usr/bin/xcodebuild -downloadComponent MetalToolchain
 fi
 
-# --- build the ghostty static lib (deps + C API combined by our libtool shim) ---
+# --- build Ghostty's native xcframework (libghostty-internal) ---
+# Upstream now combines archives itself (ranlib-normalize + libtool) and
+# rewrites compiler-rt so libc/libm bind to libSystem. We skip Ghostty.app.
 echo "==> Building libghostty (this takes a few minutes)..."
 (
   cd ghostty
-  # `native` builds only this host's macOS arch (we don't ship iOS / Intel).
-  # Zig's install/xcframework step also builds the full Ghostty.app, which can
-  # fail to link in this toolchain — we don't need it. Our libtool shim has
-  # already stashed the combined lib by then, so we ignore the exit code.
   PATH="$SHIM_DIR:$PATH" "$ZIG_BIN" build \
     -Demit-xcframework=true \
     -Dxcframework-target=native \
-    -Doptimize=ReleaseFast || echo "==> zig build returned non-zero (expected: the Ghostty.app step); checking lib..."
+    -Demit-macos-app=false \
+    -Doptimize=ReleaseFast
 )
 rm -rf "$SHIM_DIR"
 
-[ -f "$FATLIB_DEST" ] || {
-  echo "Error: combined libghostty-fat.a was not produced (libtool shim did not run — clear ghostty/.zig-cache and retry)" >&2
+XCFW="$REPO_ROOT/ghostty/macos/GhosttyKit.xcframework"
+[ -d "$XCFW" ] || {
+  echo "Error: ghostty/macos/GhosttyKit.xcframework was not produced" >&2
   exit 1
 }
 
-# --- assemble the xcframework ourselves ---
 echo "==> Packaging GhosttyKit.xcframework..."
 rm -rf "$REPO_ROOT/GhosttyKit.xcframework"
-/usr/bin/xcodebuild -create-xcframework \
-  -library "$FATLIB_DEST" \
-  -headers "$REPO_ROOT/ghostty/include" \
-  -output "$REPO_ROOT/GhosttyKit.xcframework" >/dev/null
+cp -R "$XCFW" "$REPO_ROOT/GhosttyKit.xcframework"
 cp "$REPO_ROOT/ghostty/include/ghostty.h" "$REPO_ROOT/ghostty.h"
-rm -rf "$REPO_ROOT/.ghostty-build"
 
-LIB="$(find "$REPO_ROOT/GhosttyKit.xcframework" -name 'libghostty-fat.a' | head -1)"
+# Compiled terminfo lives next to Contents/Resources/ghostty so libghostty
+# can set TERMINFO=<resources>/../terminfo.
+if [ -d "$REPO_ROOT/ghostty/zig-out/share/terminfo" ]; then
+  rm -rf "$REPO_ROOT/Resources/terminfo"
+  cp -R "$REPO_ROOT/ghostty/zig-out/share/terminfo" "$REPO_ROOT/Resources/terminfo"
+fi
+
+LIB="$(find "$REPO_ROOT/GhosttyKit.xcframework" -name '*.a' | head -1)"
 # grep -c (not -q) consumes all of nm's output, avoiding a SIGPIPE that would
 # trip `set -o pipefail`.
 if [ "$(nm "$LIB" 2>/dev/null | grep -c ' T _ghostty_init' || true)" -eq 0 ]; then

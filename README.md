@@ -97,13 +97,13 @@ Requires Xcode (with the Metal Toolchain component) and
 
 ```sh
 git submodule update --init ghostty   # the pinned ghostty source
-./scripts/build-ghosttykit.sh         # builds GhosttyKit.xcframework (needs Zig 0.15.2; auto-downloaded)
+./scripts/build-ghosttykit.sh         # builds GhosttyKit.xcframework (needs Zig 0.16.0; auto-downloaded)
 xcodegen generate                     # generates kterm.xcodeproj from project.yml
 xcodebuild -project kterm.xcodeproj -scheme kterm -configuration Release
 ```
 
 `build-ghosttykit.sh` downloads the exact Zig toolchain, pins Zig's macOS SDK to
-the Command Line Tools' macOS 15 SDK (Zig 0.15.2 can't parse the macOS 26 SDK),
+the Command Line Tools' macOS 15 SDK (Zig 0.16.0 can't parse the macOS 26 SDK),
 and emits `GhosttyKit.xcframework` from the `ghostty/` submodule.
 
 ## Layout

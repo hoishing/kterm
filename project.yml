@@ -35,6 +35,11 @@ targets:
         # Find GhosttyKit.xcframework at the repo root.
         FRAMEWORK_SEARCH_PATHS:
           - "$(PROJECT_DIR)"
+        # Static libghostty: the new header exports GHOSTTY_API as
+        # dllimport/visibility unless this is set.
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "GHOSTTY_STATIC=1"
         # libghostty is a static library: link it plus every system framework
         # and library it depends on (it carries no autolink hints).
         OTHER_LDFLAGS:
