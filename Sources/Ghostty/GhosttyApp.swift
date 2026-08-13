@@ -239,6 +239,117 @@ final class GhosttyApp {
             }
             return true
 
+        case GHOSTTY_ACTION_NEW_TAB:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async {
+                for model in AppModel.all {
+                    if model.locate(surfaceView: view) != nil {
+                        model.newHorizontalTab(from: view)
+                        return
+                    }
+                }
+            }
+            return true
+
+        case GHOSTTY_ACTION_NEW_WINDOW:
+            DispatchQueue.main.async { AppModel.openNewWindow?() }
+            return true
+
+        case GHOSTTY_ACTION_GOTO_TAB:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let tab = action.action.goto_tab
+            for model in AppModel.all {
+                if model.gotoTab(from: view, tab: tab) { return true }
+            }
+            return false
+
+        case GHOSTTY_ACTION_CLOSE_TAB:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let mode = action.action.close_tab_mode
+            DispatchQueue.main.async {
+                for model in AppModel.all { model.closeTab(from: view, mode: mode) }
+            }
+            return true
+
+        case GHOSTTY_ACTION_CLOSE_WINDOW:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async {
+                for model in AppModel.all { model.closeWindow(from: view) }
+            }
+            return true
+
+        case GHOSTTY_ACTION_MOVE_TAB:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let amount = Int(action.action.move_tab.amount)
+            for model in AppModel.all {
+                if model.moveTab(from: view, amount: amount) { return true }
+            }
+            return false
+
+        case GHOSTTY_ACTION_OPEN_CONFIG:
+            DispatchQueue.main.async { GhosttyApp.openKtermConfig() }
+            return true
+
+        case GHOSTTY_ACTION_OPEN_URL:
+            return GhosttyApp.openURL(action.action.open_url)
+
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let shape = action.action.mouse_shape
+            DispatchQueue.main.async { view.setCursorShape(shape) }
+            return true
+
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            let visible = action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE
+            DispatchQueue.main.async { view.setCursorVisible(visible) }
+            return true
+
+        case GHOSTTY_ACTION_SET_TAB_TITLE:
+            // Same payload as SET_TITLE; kterm's tab label already mirrors the
+            // focused pane title, so reuse that path.
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface),
+                  let titlePtr = action.action.set_tab_title.title else { return false }
+            let title = String(cString: titlePtr)
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async { view.onTitleChange?(title) }
+            return true
+
+        case GHOSTTY_ACTION_TOGGLE_FULLSCREEN:
+            guard target.tag == GHOSTTY_TARGET_SURFACE,
+                  let surface = target.target.surface,
+                  let ud = ghostty_surface_userdata(surface) else { return false }
+            let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
+            DispatchQueue.main.async { view.window?.toggleFullScreen(nil) }
+            return true
+
+        case GHOSTTY_ACTION_QUIT:
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+            return true
+
         // Split actions are handled by the owning AppModel (see AppModel's
         // newSplit / gotoSplit / …). Ghostty default keybinds drive these:
         //   super+d / super+shift+d → new_split
@@ -307,6 +418,69 @@ final class GhosttyApp {
         default:
             return false
         }
+    }
+
+    /// Open `~/.config/kterm/config` in the default editor, creating an empty
+    /// file if it doesn't exist yet. Ghostty `open_config`.
+    private static func openKtermConfig() {
+        let url = KtermConfig.path
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: url.path) {
+            try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? Data().write(to: url, options: .withoutOverwriting)
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Ghostty `open_url`. OSC 8 targets only open http(s)/mailto; other
+    /// schemes and local files from terminal output are ignored so they
+    /// cannot reach Launch Services. Matches Ghostty's UntrustedURL policy
+    /// for the allow-list (confirm/deny UI is omitted).
+    private static func openURL(_ v: ghostty_action_open_url_s) -> Bool {
+        let raw: String
+        if let ptr = v.url {
+            raw = String(data: Data(bytes: ptr, count: Int(v.len)), encoding: .utf8) ?? ""
+        } else {
+            raw = ""
+        }
+        guard !raw.isEmpty else { return true }
+
+        if v.kind == GHOSTTY_ACTION_OPEN_URL_KIND_OSC8 {
+            guard let url = URL(string: raw),
+                  let scheme = url.scheme?.lowercased()
+            else { return true }
+            switch scheme {
+            case "http", "https":
+                guard let host = url.host, !host.isEmpty else { return true }
+                NSWorkspace.shared.open(url)
+            case "mailto":
+                guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                      !components.path.isEmpty else { return true }
+                NSWorkspace.shared.open(url)
+            default:
+                break
+            }
+            return true
+        }
+
+        let url: URL
+        if let candidate = URL(string: raw), candidate.scheme != nil {
+            url = candidate
+        } else {
+            url = URL(filePath: (raw as NSString).standardizingPath)
+        }
+
+        if v.kind == GHOSTTY_ACTION_OPEN_URL_KIND_TEXT {
+            let editor = NSWorkspace.shared.urlForApplication(toOpen: url)
+                ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.TextEdit")
+            if let editor {
+                NSWorkspace.shared.open([url], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
+                return true
+            }
+        }
+
+        NSWorkspace.shared.open(url)
+        return true
     }
 
     /// Shell exited (or surface asked to close). Tell the owner to drop the tab.

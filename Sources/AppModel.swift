@@ -386,6 +386,87 @@ final class AppModel {
         refreshBranch(for: term)
     }
 
+    // MARK: - Tabs / windows (Ghostty keybinds → actions)
+
+    /// Ghostty `new_tab` — a new horizontal tab in the group that owns `surfaceView`.
+    func newHorizontalTab(from surfaceView: SurfaceView) {
+        guard let (group, _, source) = locate(surfaceView: surfaceView) else {
+            newHorizontalTab()
+            return
+        }
+        let term = makeTerminal(inheritFrom: source)
+        let tab = TerminalTab(root: term)
+        group.tabs.insert(tab, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
+        group.selectedTabID = tab.id
+        selectedGroupID = group.id
+    }
+
+    /// Ghostty `goto_tab:*`. Returns `false` when the target doesn't exist so
+    /// performable keybinds don't consume the key.
+    @discardableResult
+    func gotoTab(from surfaceView: SurfaceView, tab: ghostty_action_goto_tab_e) -> Bool {
+        guard let (group, _, _) = locate(surfaceView: surfaceView), !group.tabs.isEmpty else {
+            return false
+        }
+        switch tab {
+        case GHOSTTY_GOTO_TAB_PREVIOUS:
+            cycleHorizontal(-1)
+            return group.tabs.count > 1
+        case GHOSTTY_GOTO_TAB_NEXT:
+            cycleHorizontal(+1)
+            return group.tabs.count > 1
+        case GHOSTTY_GOTO_TAB_LAST:
+            guard let last = group.tabs.last else { return false }
+            select(tab: last, in: group)
+            return true
+        default:
+            let index = Int(tab.rawValue) - 1
+            guard index >= 0, index < group.tabs.count else { return false }
+            select(tab: group.tabs[index], in: group)
+            return true
+        }
+    }
+
+    /// Ghostty `close_tab:*`.
+    func closeTab(from surfaceView: SurfaceView, mode: ghostty_action_close_tab_mode_e) {
+        guard let (group, tab, _) = locate(surfaceView: surfaceView) else { return }
+        switch mode {
+        case GHOSTTY_ACTION_CLOSE_TAB_MODE_THIS:
+            close(tab, in: group)
+        case GHOSTTY_ACTION_CLOSE_TAB_MODE_OTHER:
+            let keep = tab.id
+            for other in group.tabs.filter({ $0.id != keep }) {
+                close(other, in: group)
+            }
+        case GHOSTTY_ACTION_CLOSE_TAB_MODE_RIGHT:
+            guard let idx = group.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+            for other in Array(group.tabs.suffix(from: idx + 1)) {
+                close(other, in: group)
+            }
+        default:
+            break
+        }
+    }
+
+    /// Ghostty `close_window`.
+    func closeWindow(from surfaceView: SurfaceView) {
+        surfaceView.window?.close()
+    }
+
+    /// Ghostty `move_tab` — shift the horizontal tab by `amount` slots.
+    @discardableResult
+    func moveTab(from surfaceView: SurfaceView, amount: Int) -> Bool {
+        guard let (group, tab, _) = locate(surfaceView: surfaceView),
+              let idx = group.tabs.firstIndex(where: { $0.id == tab.id }),
+              group.tabs.count > 1
+        else { return false }
+        let dest = idx + Int(amount)
+        guard dest >= 0, dest < group.tabs.count else { return false }
+        group.tabs.swapAt(idx, dest)
+        group.selectedTabID = tab.id
+        return true
+    }
+
     // MARK: - Splits (Ghostty keybinds → actions)
 
     /// Ghostty `new_split:*` — split the focused pane in `direction`.
@@ -584,7 +665,7 @@ final class AppModel {
     }
 
     /// Find the group/tab/terminal owning `surfaceView`.
-    private func locate(surfaceView: SurfaceView) -> (TabGroup, TerminalTab, Terminal)? {
+    func locate(surfaceView: SurfaceView) -> (TabGroup, TerminalTab, Terminal)? {
         for group in groups {
             for tab in group.tabs {
                 if let term = tab.terminals.first(where: { $0.surfaceView === surfaceView }) {

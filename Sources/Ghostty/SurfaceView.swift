@@ -35,6 +35,11 @@ final class SurfaceView: NSView, NSTextInputClient {
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
+    /// Cursor requested by libghostty (`GHOSTTY_ACTION_MOUSE_SHAPE`).
+    private var mouseCursor: NSCursor = .iBeam
+    /// Hidden while typing when `mouse-hide-while-typing` is on.
+    private var mouseCursorHidden = false
+
     /// - Parameter inheritFrom: the surface of the tab/pane that triggered this
     ///   one. When set, the new surface inherits that surface's config — most
     ///   importantly its working directory — via libghostty's
@@ -59,6 +64,9 @@ final class SurfaceView: NSView, NSTextInputClient {
         cfg.platform = ghostty_platform_u(macos: ghostty_platform_macos_s(
             nsview: Unmanaged.passUnretained(self).toOpaque()))
         cfg.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2)
+        // Tell libghostty whether this surface is a tab or a split so later
+        // `ghostty_surface_inherited_config` calls pick the right context.
+        cfg.context = inheritContext
 
         // Expose this tab's id to its shell as `KTERM_TAB_ID`, so a program in
         // the tab can address it — e.g. `open "kterm://focus-tab?id=$KTERM_TAB_ID"`
@@ -207,15 +215,30 @@ final class SurfaceView: NSView, NSTextInputClient {
         // Push preedit state to libghostty.
         syncPreedit(clearIfNeeded: markedBefore)
 
+        let composing = markedText.length > 0 || markedBefore
         if let acc = keyTextAccumulator, !acc.isEmpty {
             for text in acc {
+                if Self.shouldSuppressComposingControlInput(text, composing: composing) { continue }
                 _ = sendKey(action, event: event, translationEvent: translationEvent, text: text, composing: false)
             }
         } else {
+            if Self.shouldSuppressComposingControlInput(event.characters, composing: composing) { return }
             _ = sendKey(action, event: event, translationEvent: translationEvent,
                         text: translationEvent.ghosttyCharacters,
-                        composing: markedText.length > 0 || markedBefore)
+                        composing: composing)
         }
+    }
+
+    /// Ghostty: drop lone control characters the IME accumulated while composing
+    /// so they don't leak through to the terminal (e.g. ctrl+h cancelling preedit).
+    static func shouldSuppressComposingControlInput(_ text: String?, composing: Bool) -> Bool {
+        guard composing, let text else { return false }
+        let scalars = text.unicodeScalars
+        guard let scalar = scalars.first,
+              scalars.index(after: scalars.startIndex) == scalars.endIndex else {
+            return false
+        }
+        return scalar.value < 0x20
     }
 
     override func keyUp(with event: NSEvent) {
@@ -311,6 +334,44 @@ final class SurfaceView: NSView, NSTextInputClient {
             rect: bounds,
             options: [.activeAlways, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited],
             owner: self, userInfo: nil))
+    }
+
+    override func resetCursorRects() {
+        guard !mouseCursorHidden else { return }
+        addCursorRect(bounds, cursor: mouseCursor)
+    }
+
+    /// libghostty `GHOSTTY_ACTION_MOUSE_SHAPE`.
+    func setCursorShape(_ shape: ghostty_action_mouse_shape_e) {
+        switch shape {
+        case GHOSTTY_MOUSE_SHAPE_TEXT: mouseCursor = .iBeam
+        case GHOSTTY_MOUSE_SHAPE_VERTICAL_TEXT: mouseCursor = .iBeam
+        case GHOSTTY_MOUSE_SHAPE_POINTER: mouseCursor = .pointingHand
+        case GHOSTTY_MOUSE_SHAPE_GRAB: mouseCursor = .openHand
+        case GHOSTTY_MOUSE_SHAPE_GRABBING: mouseCursor = .closedHand
+        case GHOSTTY_MOUSE_SHAPE_W_RESIZE: mouseCursor = .resizeLeft
+        case GHOSTTY_MOUSE_SHAPE_E_RESIZE: mouseCursor = .resizeRight
+        case GHOSTTY_MOUSE_SHAPE_N_RESIZE: mouseCursor = .resizeUp
+        case GHOSTTY_MOUSE_SHAPE_S_RESIZE: mouseCursor = .resizeDown
+        case GHOSTTY_MOUSE_SHAPE_NS_RESIZE, GHOSTTY_MOUSE_SHAPE_ROW_RESIZE:
+            mouseCursor = .resizeUpDown
+        case GHOSTTY_MOUSE_SHAPE_EW_RESIZE, GHOSTTY_MOUSE_SHAPE_COL_RESIZE:
+            mouseCursor = .resizeLeftRight
+        case GHOSTTY_MOUSE_SHAPE_CROSSHAIR: mouseCursor = .crosshair
+        case GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED, GHOSTTY_MOUSE_SHAPE_NO_DROP:
+            mouseCursor = .operationNotAllowed
+        case GHOSTTY_MOUSE_SHAPE_CONTEXT_MENU: mouseCursor = .contextualMenu
+        case GHOSTTY_MOUSE_SHAPE_COPY, GHOSTTY_MOUSE_SHAPE_ALIAS: mouseCursor = .dragCopy
+        case GHOSTTY_MOUSE_SHAPE_DEFAULT: mouseCursor = .arrow
+        default: return
+        }
+        window?.invalidateCursorRects(for: self)
+    }
+
+    /// libghostty `GHOSTTY_ACTION_MOUSE_VISIBILITY`.
+    func setCursorVisible(_ visible: Bool) {
+        mouseCursorHidden = !visible
+        window?.invalidateCursorRects(for: self)
     }
 
     // MARK: - NSTextInputClient
