@@ -60,8 +60,8 @@ final class Terminal: Identifiable {
     /// Shell-integration `title` (on by default) sets this to an abbreviated
     /// cwd at the prompt and to the running command in preexec, so the label
     /// tracks the terminal's current status. Empty title falls back to the
-    /// abbreviated pwd, then "Terminal". Views truncate from the front
-    /// (`.truncationMode(.head)`) so the trailing folder stays visible.
+    /// abbreviated pwd, then "Terminal". The vertical sidebar truncates from
+    /// the tail (`.truncationMode(.tail)`) so the leading text stays visible.
     var displayTitle: String {
         if !title.isEmpty {
             // libghostty's no-OSC fallback copies the raw pwd into the title.

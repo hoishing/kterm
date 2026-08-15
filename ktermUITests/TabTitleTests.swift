@@ -7,11 +7,12 @@ import XCTest
 /// running the title becomes the command text; these assertions cover the
 /// idle/cwd form.
 ///
-/// Both views truncate long titles from the front (`.truncationMode(.head)`)
-/// so the trailing folder always stays visible, but that's a rendering-only
-/// concern — accessibility labels always expose the full, untruncated
-/// string, so it isn't asserted here. It was verified manually by screenshot
-/// (a narrow sidebar row showing "...oj/kterm/Sources/UI").
+/// The vertical sidebar truncates long titles from the tail
+/// (`.truncationMode(.tail)`) so the leading text stays visible; the
+/// horizontal tab strip still truncates from the head. Either way that's a
+/// rendering-only concern — accessibility labels always expose the full,
+/// untruncated string, so it isn't asserted here. It was verified manually
+/// by screenshot (a narrow sidebar row showing "~/proj/kterm/Sourc…").
 final class TabTitleTests: KtermUITestCase {
     func testTitlesTrackWorkingDirectory() {
         // A fresh terminal starts at home.

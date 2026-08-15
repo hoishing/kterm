@@ -81,7 +81,7 @@ private struct SidebarRow: View {
                     Text(title)
                         .font(KtermUIFont.font(size: Self.titleFontSize))
                         .lineLimit(1)
-                        .truncationMode(.head)
+                        .truncationMode(.tail)
                     // Always reserve the branch line so rows inside/outside a
                     // git repo share the same height. Starship-style:
                     // `main` or `main [!?]` / `main [⇡]`.
