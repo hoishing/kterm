@@ -63,6 +63,7 @@ Baked-in defaults (override by setting the same key in your config):
 | `macos-option-as-alt` | `left` | Left ⌥ acts as Alt/Meta (e.g. for readline word-jump) |
 | `copy-on-select` | `clipboard` | Selecting text copies it to the system clipboard |
 | `theme` | `Ghostty Default Style Dark` | Terminal color theme (bundled with kterm) |
+| `font-family` | `JetBrainsMono Nerd Font Mono` | Terminal text. Missing glyphs (CJK, emoji, …) use Ghostty's CoreText fallback. Repeatable: a `font-family` line in the config file replaces this default |
 
 `kterm-` keys (app shell, no libghostty default):
 

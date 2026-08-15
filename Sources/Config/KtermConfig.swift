@@ -40,11 +40,13 @@ struct KtermConfig {
 
     /// Built-in libghostty defaults, applied before the user's config file so
     /// any matching key there overrides them (libghostty keeps the last value
-    /// for scalar keys).
+    /// for scalar keys). `font-family` is repeatable and would otherwise
+    /// append; `load()` resets it before the user's first `font-family` line.
     private static let builtinDefaults = [
         "macos-option-as-alt = left",
         "copy-on-select = clipboard",
         "theme = Ghostty Default Style Dark",
+        "font-family = JetBrainsMono Nerd Font Mono",
     ]
 
     /// Ghostty `font-feature` line that turns programming ligatures off, per
@@ -67,6 +69,7 @@ struct KtermConfig {
         var config = KtermConfig()
         config.ghosttyLines = builtinDefaults
 
+        var resetFontFamily = false
         if let text = try? String(contentsOf: path, encoding: .utf8) {
             for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
                 let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -81,6 +84,12 @@ struct KtermConfig {
                     let value = parts.count > 1 ? parts[1] : ""
                     config.apply(ktermKey: key, value: value)
                 } else {
+                    // RepeatableString appends; reset so a user `font-family`
+                    // replaces the builtin instead of stacking after it.
+                    if key == "font-family" && !resetFontFamily {
+                        config.ghosttyLines.append("font-family =")
+                        resetFontFamily = true
+                    }
                     config.ghosttyLines.append(line)
                 }
             }
