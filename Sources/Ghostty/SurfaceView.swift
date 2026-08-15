@@ -15,6 +15,9 @@ final class SurfaceView: NSView, NSTextInputClient {
 
     /// Called when libghostty reports a new title for this surface.
     var onTitleChange: ((String) -> Void)?
+    /// Coalesces rapid OSC 2 title changes (Ghostty `setTitle`, 75ms) so
+    /// preexec→precmd flickers do not flash through the tab chip.
+    private var titleChangeTimer: Timer?
     /// Called when libghostty reports a new working directory for this surface.
     var onPwdChange: ((String) -> Void)?
     /// Called when the underlying shell process exits / surface requests close.
@@ -96,7 +99,18 @@ final class SurfaceView: NSView, NSTextInputClient {
 
     required init?(coder: NSCoder) { fatalError("not supported") }
 
+    /// Apply a libghostty surface title. Matches Ghostty's 75ms coalesce so
+    /// rapid OSC 2 updates (preexec command → precmd cwd) do not flicker.
+    func setTitle(_ title: String) {
+        titleChangeTimer?.invalidate()
+        titleChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.075, repeats: false) { [weak self] _ in
+            self?.titleChangeTimer = nil
+            self?.onTitleChange?(title)
+        }
+    }
+
     deinit {
+        titleChangeTimer?.invalidate()
         if let surface {
             // Must free on the main actor; capture the raw value so we don't
             // retain self.

@@ -1,8 +1,11 @@
 import XCTest
 
-/// Tab titles track each terminal's working directory: `~` for home, a
-/// `~/...`-relative path inside home, and the full path outside home (see
-/// `Terminal.displayTitle` in AppModel.swift).
+/// Tab titles track libghostty's surface title (OSC 2), the same source as
+/// Ghostty's tab bar. At the prompt, shell-integration `title` sets that to
+/// an abbreviated cwd: `~` for home, `~/...` inside home, full path outside
+/// (see `Terminal.displayTitle` in AppModel.swift). While a command is
+/// running the title becomes the command text; these assertions cover the
+/// idle/cwd form.
 ///
 /// Both views truncate long titles from the front (`.truncationMode(.head)`)
 /// so the trailing folder always stays visible, but that's a rendering-only

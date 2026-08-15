@@ -180,7 +180,7 @@ final class GhosttyApp {
                   let titlePtr = action.action.set_title.title else { return false }
             let title = String(cString: titlePtr)
             let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
-            DispatchQueue.main.async { view.onTitleChange?(title) }
+            DispatchQueue.main.async { view.setTitle(title) }
             return true
 
         case GHOSTTY_ACTION_PWD:
@@ -327,15 +327,15 @@ final class GhosttyApp {
             return true
 
         case GHOSTTY_ACTION_SET_TAB_TITLE:
-            // Same payload as SET_TITLE; kterm's tab label already mirrors the
-            // focused pane title, so reuse that path.
+            // Same payload as SET_TITLE. Tab chips already show the focused
+            // pane's surface title, so apply it on that path.
             guard target.tag == GHOSTTY_TARGET_SURFACE,
                   let surface = target.target.surface,
                   let ud = ghostty_surface_userdata(surface),
                   let titlePtr = action.action.set_tab_title.title else { return false }
             let title = String(cString: titlePtr)
             let view = Unmanaged<SurfaceView>.fromOpaque(ud).takeUnretainedValue()
-            DispatchQueue.main.async { view.onTitleChange?(title) }
+            DispatchQueue.main.async { view.setTitle(title) }
             return true
 
         case GHOSTTY_ACTION_TOGGLE_FULLSCREEN:

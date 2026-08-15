@@ -55,13 +55,24 @@ final class Terminal: Identifiable {
             workingDirectory: workingDirectory)
     }
 
-    /// A label for the tab strip: the working directory path relative to
-    /// home (`~/...`), or the full path if outside home, falling back to
-    /// the title, then "Terminal". Views truncate this from the front
-    /// (`.truncationMode(.head)`) so the trailing folder always stays visible.
+    /// Tab/sidebar label, same source as Ghostty's tab bar: the surface
+    /// title from libghostty (`GHOSTTY_ACTION_SET_TITLE` / OSC 2).
+    /// Shell-integration `title` (on by default) sets this to an abbreviated
+    /// cwd at the prompt and to the running command in preexec, so the label
+    /// tracks the terminal's current status. Empty title falls back to the
+    /// abbreviated pwd, then "Terminal". Views truncate from the front
+    /// (`.truncationMode(.head)`) so the trailing folder stays visible.
     var displayTitle: String {
+        if !title.isEmpty {
+            // libghostty's no-OSC fallback copies the raw pwd into the title.
+            // Abbreviate that so we still show `~` rather than `/Users/…`.
+            if title == pwd, let path = Self.displayPath(for: title) {
+                return path
+            }
+            return title
+        }
         if let path = Self.displayPath(for: pwd) { return path }
-        return title.isEmpty ? "Terminal" : title
+        return "Terminal"
     }
 
     /// The directory path with the home directory abbreviated to `~`.
