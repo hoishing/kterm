@@ -29,11 +29,9 @@ splits inside each horizontal tab.
 | ⌘W | Close the focused **pane** (closes the tab when it was the last pane) |
 | ⌘D | Split pane **right** (Ghostty `new_split:right`) |
 | ⌘⇧D | Split pane **down** (Ghostty `new_split:down`) |
-| ⌘[ / ⌘] | Previous / next pane (Ghostty `goto_split:previous` / `next`) |
 | ⌘⌥↑↓←→ | Focus pane in that direction (`goto_split`) |
 | ⌘⌃↑↓←→ | Resize focused split (`resize_split`, step 10) |
 | ⌘⌃= | Equalize splits |
-| ⌘⇧↩ | Toggle split zoom |
 | ⌘B | Toggle the sidebar |
 | ⌘1…⌘9 | Jump to vertical tab (group) by position |
 | ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab |
@@ -64,6 +62,7 @@ Baked-in defaults (override by setting the same key in your config):
 | `copy-on-select` | `clipboard` | Selecting text copies it to the system clipboard |
 | `theme` | `Ghostty Default Style Dark` | Terminal color theme (bundled with kterm) |
 | `font-family` | `JetBrainsMono Nerd Font Mono` | Terminal text. Missing glyphs (CJK, emoji, …) use Ghostty's CoreText fallback. Repeatable: a `font-family` line in the config file replaces this default |
+| `keybind` | `super+shift+v`, `super+[`, `super+]`, `super+enter`, `super+shift+enter`, `super+z`, `super+shift+z` unbound | Ghostty's paste-from-selection / previous-next split / fullscreen / split-zoom / undo / redo. Rebind any of them in the config file |
 
 `kterm-` keys (app shell, no libghostty default):
 
@@ -115,7 +114,7 @@ Window
    ├─ Sidebar          vertical tabs (groups)        ⌘N adds, ⌘B toggles, resizable
    └─ VStack
       ├─ TabStrip      horizontal tabs               ⌘T adds; × closes tab
-      └─ SplitTree     panes inside the active tab   ⌘D/⌘⇧D split; ⌘[/⌘] navigate
+      └─ SplitTree     panes inside the active tab   ⌘D/⌘⇧D split; ⌘⌥arrows navigate
          └─ SurfaceView  libghostty terminal (per pane)
 ```
 

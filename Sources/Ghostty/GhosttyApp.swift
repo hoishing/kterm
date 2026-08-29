@@ -351,13 +351,13 @@ final class GhosttyApp {
             return true
 
         // Split actions are handled by the owning AppModel (see AppModel's
-        // newSplit / gotoSplit / …). Ghostty default keybinds drive these:
+        // newSplit / gotoSplit / …). Menu items and remaining Ghostty
+        // keybinds drive these (super+[ / super+] / super+shift+enter are
+        // unbound by default):
         //   super+d / super+shift+d → new_split
-        //   super+[ / super+]       → goto_split previous/next
         //   super+alt+arrows        → goto_split directional
         //   super+ctrl+arrows       → resize_split
         //   super+ctrl+=            → equalize_splits
-        //   super+shift+enter       → toggle_split_zoom
         case GHOSTTY_ACTION_NEW_SPLIT:
             guard target.tag == GHOSTTY_TARGET_SURFACE,
                   let surface = target.target.surface,

@@ -190,6 +190,9 @@ private struct KtermCommands: Commands {
         // tab only when it was the last pane). The tab-chip × still closes the
         // whole horizontal tab.
         CommandGroup(replacing: .saveItem) {}
+        // Ghostty's ⌘Z / ⌘⇧Z (undo/redo) are unbound by default; drop the
+        // system Edit-menu shortcuts so those keys reach the terminal.
+        CommandGroup(replacing: .undoRedo) {}
         CommandGroup(after: .newItem) {
             Button("Close Surface") { model?.closeFocusedSurface() }
                 .keyboardShortcut("w", modifiers: .command)
@@ -243,12 +246,9 @@ private struct KtermCommands: Commands {
         // Pane navigation / zoom / resize — same labels as Ghostty's Window menu.
         CommandGroup(after: .windowList) {
             Button("Zoom Split") { model?.toggleSplitZoom() }
-                .keyboardShortcut(.return, modifiers: [.command, .shift])
 
             Button("Select Previous Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_PREVIOUS) }
-                .keyboardShortcut("[", modifiers: .command)
             Button("Select Next Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_NEXT) }
-                .keyboardShortcut("]", modifiers: .command)
 
             Menu("Select Split") {
                 Button("Select Split Above") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_UP) }

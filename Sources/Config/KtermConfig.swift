@@ -42,11 +42,20 @@ struct KtermConfig {
     /// any matching key there overrides them (libghostty keeps the last value
     /// for scalar keys). `font-family` is repeatable and would otherwise
     /// append; `load()` resets it before the user's first `font-family` line.
+    /// `keybind` is also repeatable: a later line for the same trigger wins, so
+    /// the user's config can rebind any of these unbound keys.
     private static let builtinDefaults = [
         "macos-option-as-alt = left",
         "copy-on-select = clipboard",
         "theme = Ghostty Default Style Dark",
         "font-family = JetBrainsMono Nerd Font Mono",
+        "keybind = super+shift+v=unbind",
+        "keybind = super+[=unbind",
+        "keybind = super+]=unbind",
+        "keybind = super+enter=unbind",
+        "keybind = super+shift+enter=unbind",
+        "keybind = super+z=unbind",
+        "keybind = super+shift+z=unbind",
     ]
 
     /// Ghostty `font-feature` line that turns programming ligatures off, per
