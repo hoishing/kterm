@@ -48,6 +48,7 @@ struct TabStrip: View {
                         TabChip(
                             title: tab.displayTitle,
                             isSelected: tab.id == group.selectedTab?.id,
+                            isOnlyTab: group.tabs.count == 1,
                             hasUnread: tab.hasUnread,
                             select: { model.select(tab: tab, in: group) },
                             close: { model.close(tab, in: group) }
@@ -103,6 +104,8 @@ struct TabStrip: View {
 private struct TabChip: View {
     let title: String
     let isSelected: Bool
+    /// Sole tab in the strip: no fill, so the chip blends with the titlebar.
+    let isOnlyTab: Bool
     /// This tab has an unacknowledged notification → show a 🔔. Persists even
     /// when selected; cleared only by interacting with the tab's content.
     let hasUnread: Bool
@@ -119,7 +122,9 @@ private struct TabChip: View {
                     .font(.system(size: 9, weight: .bold))
             }
             .buttonStyle(.plain)
-            .opacity(hovering || isSelected ? 1 : 0)
+            // A lone selected tab always has isSelected; hide × until hover so
+            // it does not read as a tab chip.
+            .opacity(hovering || (isSelected && !isOnlyTab) ? 1 : 0)
             .help("Close tab")
             .accessibilityIdentifier("tabstrip.tab.close")
 
@@ -138,11 +143,12 @@ private struct TabChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        // Fill the equal share the parent HStack hands each chip so the pill
+        // Fill the equal share the parent HStack hands each chip so the
         // background stretches (2 tabs → 50% each).
         .frame(minWidth: 60, maxWidth: .infinity)
-        .background(TabHighlight.shape.fill(TabHighlight.fill(isSelected: isSelected, hovering: hovering)))
-        .contentShape(Capsule())
+        .background(TabHighlight.shape.fill(TabHighlight.fill(
+            isSelected: isSelected, hovering: hovering, isOnlyTab: isOnlyTab)))
+        .contentShape(TabHighlight.shape)
         .onTapGesture(perform: select)
         .onHover { hovering = $0 }
         .accessibilityElement(children: .ignore)
@@ -155,12 +161,14 @@ private struct TabChip: View {
     }
 }
 
-/// Shared active/hover fill color for both horizontal (`TabChip`, fully-rounded
-/// capsule) and vertical (`SidebarRow`, 6pt rounded rect) tabs: light grey when active.
+/// Shared active/hover fill for horizontal (`TabChip`, 6pt rounded rect) and
+/// vertical (`SidebarRow`, 6pt rounded rect) tabs: light grey when active. A
+/// lone horizontal tab stays clear so it matches the terminal titlebar.
 enum TabHighlight {
-    static let shape = Capsule()
+    static let shape = RoundedRectangle(cornerRadius: 6)
 
-    static func fill(isSelected: Bool, hovering: Bool) -> Color {
+    static func fill(isSelected: Bool, hovering: Bool, isOnlyTab: Bool = false) -> Color {
+        if isOnlyTab { return Color.clear }
         if isSelected { return Color.white.opacity(0.16) }
         if hovering { return Color.white.opacity(0.07) }
         return Color.clear
