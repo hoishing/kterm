@@ -52,8 +52,6 @@ struct KtermConfig {
         "keybind = super+shift+v=unbind",
         "keybind = super+[=unbind",
         "keybind = super+]=unbind",
-        "keybind = super+enter=unbind",
-        "keybind = super+shift+enter=unbind",
         "keybind = super+z=unbind",
         "keybind = super+shift+z=unbind",
     ]

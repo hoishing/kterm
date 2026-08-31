@@ -352,8 +352,7 @@ final class GhosttyApp {
 
         // Split actions are handled by the owning AppModel (see AppModel's
         // newSplit / gotoSplit / …). Menu items and remaining Ghostty
-        // keybinds drive these (super+[ / super+] / super+shift+enter are
-        // unbound by default):
+        // keybinds drive these (super+[ / super+] are unbound by default):
         //   super+d / super+shift+d → new_split
         //   super+alt+arrows        → goto_split directional
         //   super+ctrl+arrows       → resize_split
