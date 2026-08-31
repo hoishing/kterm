@@ -167,11 +167,11 @@ private struct KtermCommands: Commands {
         let openWindow = openWindow
         let _ = (AppModel.openNewWindow = { openWindow(id: "main") })
 
-        // Replace the default New Window (⌘N) with kterm's tab commands.
-        // There is no New Window menu item/hotkey — multi-window is not a
-        // primary workflow; cold `open -a kterm <dir>` still opens one via
-        // `AppModel.openNewWindow` above.
+        // Replace the default New Window (⌘N) so ⌘N is a vertical tab.
+        // New Window itself is restored as ⌘⇧N (WindowGroup id "main").
         CommandGroup(replacing: .newItem) {
+            Button("New Window") { openWindow(id: "main") }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             Button("New Vertical Tab") { model?.newVerticalTab() }
                 .keyboardShortcut("n", modifiers: .command)
             Button("New Horizontal Tab") { model?.newHorizontalTab() }
@@ -234,13 +234,11 @@ private struct KtermCommands: Commands {
                 .keyboardShortcut("]", modifiers: [.command, .shift])
 
             // ⌘⌃[ / ⌘⌃] — previous/next vertical tab (group).
-            // ⌘` is an alias for next vertical tab (cycle).
+            // ⌘` is left unbound so macOS Cycle Windows works.
             Button("Previous Vertical Tab") { model?.selectPrevVerticalTab() }
                 .keyboardShortcut("[", modifiers: [.command, .control])
             Button("Next Vertical Tab") { model?.selectNextVerticalTab() }
                 .keyboardShortcut("]", modifiers: [.command, .control])
-            Button("Cycle Vertical Tabs") { model?.selectNextVerticalTab() }
-                .keyboardShortcut("`", modifiers: .command)
         }
 
         // Pane navigation / zoom / resize — same labels as Ghostty's Window menu.

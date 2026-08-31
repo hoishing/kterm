@@ -284,7 +284,7 @@ struct WindowConfigurator: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             view.window?.isMovableByWindowBackground = false
-            // Hand the window to the model so ⌘` window cycling can raise it.
+            // Hand the window to the model so it can be raised (focus, notifications).
             model.window = view.window
         }
         return view

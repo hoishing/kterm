@@ -1,8 +1,8 @@
 import XCTest
 
-/// Quit hotkey from the app menu. Multi-window open/cycle hotkeys were removed
-/// (no New Window / Cycle Windows); cold `open -a kterm <dir>` still creates the
-/// first window via `AppModel.openNewWindow` without a user-facing shortcut.
+/// Quit hotkey from the app menu. New Window is ⌘⇧N; Cycle Windows is the
+/// system ⌘`. Cold `open -a kterm <dir>` still creates the first window via
+/// `AppModel.openNewWindow`.
 final class MultiWindowTests: KtermUITestCase {
     func testQuitHotkey() {
         XCTAssertEqual(app.state, .runningForeground)

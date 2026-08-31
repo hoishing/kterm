@@ -25,6 +25,7 @@ splits inside each horizontal tab.
 | Key | Action |
 | --- | --- |
 | ⌘N | New **vertical** tab (a new group in the left sidebar) |
+| ⌘⇧N | New window |
 | ⌘T | New **horizontal** tab (a new split tree in the current group) |
 | ⌘W | Close the focused **pane** (closes the tab when it was the last pane) |
 | ⌘D | Split pane **right** (Ghostty `new_split:right`) |
@@ -36,7 +37,7 @@ splits inside each horizontal tab.
 | ⌘1…⌘9 | Jump to vertical tab (group) by position |
 | ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab |
 | ⌘⌃[ / ⌘⌃] | Previous / next vertical tab (group) |
-| ⌘` | Cycle vertical tabs (alias of next vertical tab) |
+| ⌘` | Cycle windows (macOS) |
 | ⌘Q | Quit (no confirmation) |
 
 Holding ⌘ alone for half a second reveals each sidebar row's ⌘-digit shortcut as a hint.
