@@ -33,6 +33,7 @@ splits inside each horizontal tab.
 | ⌘⌥↑↓←→ | Focus pane in that direction (`goto_split`) |
 | ⌘⌃↑↓←→ | Resize focused split (`resize_split`, step 10) |
 | ⌘⌃= | Equalize splits |
+| ⌘⇧↩ | Toggle split zoom |
 | ⌘B | Toggle the sidebar |
 | ⌘1…⌘9 | Jump to vertical tab (group) by position |
 | ⌘⇧[ / ⌘⇧] | Previous / next horizontal tab |
@@ -63,7 +64,7 @@ Baked-in defaults (override by setting the same key in your config):
 | `copy-on-select` | `clipboard` | Selecting text copies it to the system clipboard |
 | `theme` | `Ghostty Default Style Dark` | Terminal color theme (bundled with kterm) |
 | `font-family` | `JetBrainsMono Nerd Font Mono` | Terminal text. Missing glyphs (CJK, emoji, …) use Ghostty's CoreText fallback. Repeatable: a `font-family` line in the config file replaces this default |
-| `keybind` | `super+shift+v`, `super+[`, `super+]`, `super+enter`, `super+shift+enter`, `super+z`, `super+shift+z` unbound | Ghostty's paste-from-selection / previous-next split / fullscreen / split-zoom / undo / redo. Rebind any of them in the config file |
+| `keybind` | `super+shift+v`, `super+[`, `super+]`, `super+z`, `super+shift+z` unbound | Ghostty's paste-from-selection / previous-next split / undo / redo. Rebind any of them in the config file |
 
 `kterm-` keys (app shell, no libghostty default):
 

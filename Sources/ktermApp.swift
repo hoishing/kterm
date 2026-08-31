@@ -244,6 +244,7 @@ private struct KtermCommands: Commands {
         // Pane navigation / zoom / resize — same labels as Ghostty's Window menu.
         CommandGroup(after: .windowList) {
             Button("Zoom Split") { model?.toggleSplitZoom() }
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
 
             Button("Select Previous Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_PREVIOUS) }
             Button("Select Next Split") { model?.gotoSplit(GHOSTTY_GOTO_SPLIT_NEXT) }
