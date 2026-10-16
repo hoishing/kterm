@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "kterm grab",
+  "version": "0.1.0",
+  "description": "Pick an element on the page and copy a reference to it for a coding agent.",
+  "permissions": ["activeTab", "scripting"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Grab an element (Ctrl+Shift+K)" },
+  "commands": {
+    "grab": {
+      "suggested_key": { "default": "Ctrl+Shift+K", "mac": "MacCtrl+Shift+K" },
+      "description": "Pick an element and copy its reference"
+    }
+  }
+}

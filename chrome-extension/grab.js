@@ -1,8 +1,11 @@
-/* kterm Chrome grab. Injected into the front Chrome tab.
-   Ctrl+Shift+K (page focus only) arms the overlay. Click copies a text
-   reference to the clipboard. Nothing is typed into a terminal. */
+/* kterm grab. Injected by background.js into the page's main world on
+   Ctrl+Shift+K (or the toolbar button). Each injection toggles the picker.
+   Click copies a text reference to the clipboard; Esc or right-click cancels. */
 (function () {
-  if (window.__ktermGrabInstalled) return;
+  if (window.__ktermGrab) {
+    window.__ktermGrab.toggle();
+    return;
+  }
   if (!document.documentElement) return;
 
   var BOX_ID = "kterm-grab-box";
@@ -214,7 +217,7 @@
     node.id = TOAST_ID;
     node.textContent = message;
     node.style.cssText = [
-      "position:fixed", "left:16px", "bottom:16px", "z-index:2147483647",
+      "position:fixed", "left:16px", "bottom:16px", "z-index:2147483647", "pointer-events:none",
       "background:#1a1a2e", "color:#fff", "padding:8px 12px",
       "border-radius:8px", "font:13px/1.3 -apple-system,sans-serif",
       "box-shadow:0 6px 24px rgba(0,0,0,.35)"
@@ -225,8 +228,16 @@
 
   var armed = false;
 
+  function onKey(event) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    disarm();
+  }
+
   function disarm() {
     armed = false;
+    window.removeEventListener("keydown", onKey, true);
     [BOX_ID, CATCH_ID].forEach(function (id) {
       var node = document.getElementById(id);
       if (node) node.remove();
@@ -281,9 +292,12 @@
       var text = describe(el);
       if (copyText(text)) {
         toast("Copied element reference");
-      } else if (window.__ktermGrab) {
-        window.__ktermGrab.result = "KTERM:" + text;
-        toast("Copied element reference");
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(
+          function () { toast("Copied element reference"); },
+          function () { toast("Could not copy to the clipboard"); });
+      } else {
+        toast("Could not copy to the clipboard");
       }
     }, true);
     catcher.addEventListener("contextmenu", function (event) {
@@ -292,22 +306,10 @@
     });
     document.documentElement.appendChild(box);
     document.documentElement.appendChild(catcher);
+    window.addEventListener("keydown", onKey, true);
+    toast("Click an element to copy it (Esc cancels)");
   }
 
-  window.addEventListener("keydown", function (event) {
-    if (event.repeat) return;
-    if (event.key === "Escape" && armed) {
-      event.preventDefault();
-      disarm();
-      return;
-    }
-    var key = event.key === "K" || event.key === "k" || event.code === "KeyK";
-    if (!(event.ctrlKey && event.shiftKey && !event.metaKey && !event.altKey && key)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    arm();
-  }, true);
-
-  window.__ktermGrab = window.__ktermGrab || { result: "" };
-  window.__ktermGrabInstalled = true;
+  window.__ktermGrab = { toggle: arm };
+  arm();
 })();

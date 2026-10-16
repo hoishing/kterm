@@ -109,13 +109,15 @@ scripts/kterm tab send --id "$KTERM_TAB_ID" --text "continue" --enter
 
 ## Point at a Chrome element
 
-In Chrome's front tab, press **Ctrl+Shift+K**, then click an element. kterm
-copies a text reference (URL, selector, accessible name, source when the page
-exposes it) to the clipboard. It does not type into the agent. Paste it
-yourself.
+The `chrome-extension/` folder is a small Chrome extension. Load it once:
+`chrome://extensions` → Developer mode → Load unpacked → pick `chrome-extension/`.
 
-Chrome must allow this once: View → Developer → Allow JavaScript from Apple
-Events. The shortcut is installed in the page, so it does not fire in other apps.
+On any page, press **Ctrl+Shift+K** (or click the toolbar button), then click an
+element. The extension copies a text reference (URL, selector, accessible name,
+text, styles, HTML, and the source location when the page exposes React
+`_debugSource` or astro-grab's `data-astro-source`) to the clipboard. Paste it
+into the agent's prompt. Esc or right-click cancels. Change the shortcut at
+`chrome://extensions/shortcuts`.
 
 ## Build
 

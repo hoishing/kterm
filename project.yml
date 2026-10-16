@@ -21,9 +21,6 @@ targets:
       # and TERM to xterm-ghostty; without it the line editor breaks.
       - path: Resources/terminfo
         type: folder
-      - path: Resources/grab.js
-        type: file
-        buildPhase: resources
       - path: scripts/kterm
         type: file
         buildPhase: resources

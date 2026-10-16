@@ -17,20 +17,11 @@ enum NotificationManager {
     /// be routed back to the exact tab that raised it — see
     /// `AppDelegate.userNotificationCenter(_:didReceive:)`.
     static func post(title: String, body: String, terminalID: UUID) {
-        post(title: title, body: body, userInfo: ["terminalID": terminalID.uuidString])
-    }
-
-    /// A notice that is not tied to a pane (Chrome grab setup failures).
-    static func post(title: String, body: String) {
-        post(title: title, body: body, userInfo: [:])
-    }
-
-    private static func post(title: String, body: String, userInfo: [String: String]) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
-        content.userInfo = userInfo
+        content.userInfo = ["terminalID": terminalID.uuidString]
         let request = UNNotificationRequest(
             identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

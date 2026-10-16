@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         NotificationManager.requestAuthorizationIfNeeded()
         ControlServer.shared.start()
-        ChromeGrab.shared.start()
     }
 
     // Bell / OSC 9 / OSC 777 notifications are only posted when kterm isn't
