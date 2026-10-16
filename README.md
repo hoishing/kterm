@@ -19,6 +19,9 @@ splits inside each horizontal tab.
 - Click-to-focus notifications: desktop notification tap brings kterm forward and focuses the pane that raised it
 - Drag & drop files: dropping a file onto the terminal inserts its shell-escaped path
 - Open a folder: `open -a kterm <dir>` (or Finder "Open With" / drop on the icon) opens a new tab in that folder in the current window
+- Agent tabs: File → New Agent Tab starts Claude, Codex, Pi, or Grok in a horizontal tab (see [Agents](#agents))
+- Agent orchestration: `ktermctl` (on every pane's `PATH`) lets agents open, prompt, read, wait on, and close other tabs
+- Chrome element grab: a bundled Chrome extension copies a reference to any clicked page element for pasting into an agent
 
 ## Shortcuts
 
@@ -74,6 +77,7 @@ Baked-in defaults (override by setting the same key in your config):
 | `kterm-new-tab-position` | `after-current` | Where a new ⌘N/⌘T tab lands: `after-current` (right after the current tab, pushing the rest back) or `end` (append) |
 | `kterm-font-ligatures` | `false` | Programming ligatures. Off by default; set `true` to enable. Disabling maps to Ghostty's `font-feature = -calt, -liga, -dlig` |
 | `kterm-ui-font-family` | `JetBrainsMono Nerd Font Mono` | Font for app-shell chrome (sidebar, tab titles, shortcut pills, empty states). Falls back to the system UI font when the family isn't installed; `monospace` uses the system monospaced face. Terminal text still uses Ghostty's `font-family` |
+| `kterm-agent-claude` / `-codex` / `-pi` / `-grok` | `claude` / `codex` / `pi` / `grok` | Command for each agent tab, run as `$SHELL -lic 'exec <command> <prompt>'`, so extra flags are allowed (e.g. `claude --model opus`) |
 
 New tabs and split panes inherit the working directory of the tab/pane they were
 opened from (honouring libghostty's `window-inherit-working-directory`).
@@ -103,6 +107,8 @@ inheriting the current directory. The agent runs inside your login shell
 `$KTERM_CLI`), so an agent can orchestrate others. Pane ids are `KTERM_TAB_ID`.
 
 ```sh
+ktermctl tab list                     # every pane: id, title, pwd, agent, exited, focused
+ktermctl tab focus --id "$KTERM_TAB_ID"
 id=$(ktermctl tab new --agent codex --background --prompt "fix the login test" | sed 's/.*"id":"\([^"]*\)".*/\1/')
 ktermctl tab wait --id "$id" --for idle --timeout-ms 600000
 ktermctl tab read --id "$id" --lines 60
