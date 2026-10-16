@@ -21,9 +21,10 @@ targets:
       # and TERM to xterm-ghostty; without it the line editor breaks.
       - path: Resources/terminfo
         type: folder
-      - path: scripts/kterm
-        type: file
-        buildPhase: resources
+      # Contents/Resources/bin/ktermctl, the control CLI. Panes get it on PATH
+      # and as KTERM_CLI (see SurfaceView).
+      - path: Resources/bin
+        type: folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kterm.app

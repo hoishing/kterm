@@ -95,17 +95,26 @@ open "kterm://focus-tab?id=$KTERM_TAB_ID"
 ## Agents
 
 File → New Agent Tab starts Claude, Codex, Pi, or Grok in a new horizontal tab,
-inheriting the current directory. Override the shell command with
+inheriting the current directory. The agent runs inside your login shell
+(`$SHELL -lic`), so your PATH and rc files apply. Override the command with
 `kterm-agent-claude` (and `-codex`, `-pi`, `-grok`) in `~/.config/kterm/config`.
 
-`scripts/kterm` talks to the running app (list, new, focus, send, read). Pane
-ids are `KTERM_TAB_ID`.
+`ktermctl` drives the running app. Every pane has it on `PATH` (and at
+`$KTERM_CLI`), so an agent can orchestrate others. Pane ids are `KTERM_TAB_ID`.
 
 ```sh
-scripts/kterm tab new --agent claude --prompt "look at the login form"
-scripts/kterm tab list
-scripts/kterm tab send --id "$KTERM_TAB_ID" --text "continue" --enter
+id=$(ktermctl tab new --agent codex --background --prompt "fix the login test" | sed 's/.*"id":"\([^"]*\)".*/\1/')
+ktermctl tab wait --id "$id" --for idle --timeout-ms 600000
+ktermctl tab read --id "$id" --lines 60
+ktermctl tab send --id "$id" --text "now run the full suite" --enter
+ktermctl tab close --id "$id"
 ```
+
+- `tab new` opens next to the calling pane (`--from`, default `$KTERM_TAB_ID`);
+  `--background` keeps your current tab selected.
+- `tab send` pastes the text, then presses Return separately, so agent TUIs submit it.
+- `tab wait --for idle` returns once the screen has been still for `--quiet-ms`
+  (default 3000); `--for exit` waits for the process to exit. Exit status 2 on timeout.
 
 ## Point at a Chrome element
 

@@ -51,9 +51,9 @@ struct KtermConfig {
     /// that still uses Ghostty's `font-family`.
     var uiFontFamily: String = "JetBrainsMono Nerd Font Mono"
 
-    /// Shell command used to start each agent. `kterm-agent-<name>`. The value
-    /// is passed to libghostty as a shell command (`/bin/sh -c`), same as
-    /// Ghostty's `command`.
+    /// Shell command used to start each agent. `kterm-agent-<name>`. It runs
+    /// inside the user's login + interactive shell (see `launchCommand`), so
+    /// PATH, aliases and functions from the shell's rc files apply.
     var agentCommands: [String: String] = [
         KtermAgent.claude.rawValue: "claude",
         KtermAgent.codex.rawValue: "codex",
@@ -65,6 +65,30 @@ struct KtermConfig {
         let command = agentCommands[agent.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let command, !command.isEmpty { return command }
         return agent.rawValue
+    }
+
+    /// The libghostty `command` for an agent tab: `$SHELL -lic 'exec <agent>
+    /// <prompt>'`. libghostty itself runs commands with the app's bare
+    /// environment (launchd PATH), where `claude`, `codex`, … are not found.
+    /// Each agent CLI takes the initial prompt as its positional argument.
+    func launchCommand(for agent: KtermAgent, prompt: String?) -> String {
+        var inner = "exec " + command(for: agent)
+        if let prompt, !prompt.isEmpty { inner += " " + Self.shellQuote(prompt) }
+        return Self.shellQuote(Self.loginShell) + " -lic " + Self.shellQuote(inner)
+    }
+
+    /// The user's login shell from the password database.
+    static var loginShell: String {
+        if let pw = getpwuid(getuid()), let shell = pw.pointee.pw_shell {
+            let path = String(cString: shell)
+            if !path.isEmpty { return path }
+        }
+        return "/bin/zsh"
+    }
+
+    /// Single-quote `value` for POSIX shells (and fish).
+    static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Lines to pass through to libghostty verbatim.

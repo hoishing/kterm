@@ -1,0 +1,173 @@
+#!/bin/bash
+# Talk to a running kterm. The app writes the port and token to
+# ~/Library/Application Support/kterm/endpoint.json. Inside a kterm pane this
+# script is on PATH (and at $KTERM_CLI); the caller's pane is $KTERM_TAB_ID.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ktermctl tab list
+  ktermctl tab new --agent claude|codex|pi|grok|shell [--cwd DIR] [--prompt TEXT]
+                   [--from UUID] [--background]
+  ktermctl tab focus --id UUID
+  ktermctl tab send  --id UUID [--text TEXT] [--enter]
+  ktermctl tab read  --id UUID [--lines N]
+  ktermctl tab wait  --id UUID [--for idle|exit] [--timeout-ms MS] [--quiet-ms MS]
+  ktermctl tab close --id UUID
+
+tab new opens next to --from (default: $KTERM_TAB_ID) and prints {"id": ...}.
+--prompt is the agent's initial prompt (for shell: a command line to run).
+--background keeps the current tab selected.
+tab send pastes TEXT; --enter then presses Return separately.
+tab wait --for idle returns once the screen is unchanged for --quiet-ms
+(default 3000); exit status 2 on timeout (default 300000 ms).
+EOF
+}
+
+if [[ $# -lt 2 || "$1" != "tab" ]]; then
+  usage >&2
+  exit 1
+fi
+action="$2"
+shift 2
+
+agent=""
+cwd=""
+prompt=""
+id=""
+text=""
+enter=false
+from="${KTERM_TAB_ID:-}"
+background=false
+lines=""
+wait_for="idle"
+timeout_ms=""
+quiet_ms=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent) agent="${2:-}"; shift 2 ;;
+    --cwd) cwd="${2:-}"; shift 2 ;;
+    --prompt) prompt="${2:-}"; shift 2 ;;
+    --id) id="${2:-}"; shift 2 ;;
+    --text) text="${2:-}"; shift 2 ;;
+    --enter) enter=true; shift ;;
+    --from) from="${2:-}"; shift 2 ;;
+    --background) background=true; shift ;;
+    --lines) lines="${2:-}"; shift 2 ;;
+    --for) wait_for="${2:-}"; shift 2 ;;
+    --timeout-ms) timeout_ms="${2:-}"; shift 2 ;;
+    --quiet-ms) quiet_ms="${2:-}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+json_string() {
+  osascript -l JavaScript -e 'function run(argv) { return JSON.stringify(argv[0]); }' -- "$1"
+}
+
+is_number() { [[ "$1" =~ ^[0-9]+$ ]]; }
+
+endpoint="${HOME}/Library/Application Support/kterm/endpoint.json"
+if [[ ! -f "$endpoint" ]]; then
+  echo "kterm is not running (no endpoint file)" >&2
+  exit 1
+fi
+port=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$endpoint" | head -n 1)
+token=$(sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$endpoint" | head -n 1)
+if [[ -z "$port" || -z "$token" ]]; then
+  echo "kterm endpoint file is unreadable" >&2
+  exit 1
+fi
+
+base="http://127.0.0.1:${port}"
+auth=("Authorization: Bearer ${token}")
+
+# Print the response body. Exit 1 on an HTTP error, 2 on a wait timeout (408).
+request() {
+  local method="$1" url="$2" body="${3:-}"
+  local tmp
+  tmp=$(mktemp)
+  local code
+  if [[ -n "$body" ]]; then
+    code=$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" \
+      -H "${auth[0]}" -H 'Content-Type: application/json' \
+      --data-binary "$body" "$url") || { rm -f "$tmp"; echo "kterm is not reachable" >&2; exit 1; }
+  else
+    code=$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" \
+      -H "${auth[0]}" "$url") || { rm -f "$tmp"; echo "kterm is not reachable" >&2; exit 1; }
+  fi
+  cat "$tmp"
+  echo
+  rm -f "$tmp"
+  case "$code" in
+    200) ;;
+    408) exit 2 ;;
+    *) exit 1 ;;
+  esac
+}
+
+need_id() {
+  [[ -n "$id" ]] || { echo "--id is required" >&2; exit 1; }
+}
+
+case "$action" in
+  list)
+    request GET "${base}/tabs"
+    ;;
+  new)
+    if [[ -z "$agent" ]]; then
+      echo "--agent is required" >&2
+      exit 1
+    fi
+    if [[ -n "$cwd" ]]; then
+      cwd=$(cd "$cwd" && pwd) || { echo "--cwd is not a directory" >&2; exit 1; }
+    fi
+    body="{\"agent\":$(json_string "$agent"),\"background\":${background}"
+    [[ -n "$cwd" ]] && body+=",\"cwd\":$(json_string "$cwd")"
+    [[ -n "$prompt" ]] && body+=",\"prompt\":$(json_string "$prompt")"
+    [[ -n "$from" ]] && body+=",\"from\":$(json_string "$from")"
+    request POST "${base}/tabs" "${body}}"
+    ;;
+  focus)
+    need_id
+    request POST "${base}/tabs/${id}/focus" '{}'
+    ;;
+  send)
+    need_id
+    body="{\"text\":$(json_string "$text"),\"enter\":${enter}}"
+    request POST "${base}/tabs/${id}/send" "$body"
+    ;;
+  read)
+    need_id
+    query=""
+    if [[ -n "$lines" ]]; then
+      is_number "$lines" || { echo "--lines must be a number" >&2; exit 1; }
+      query="?lines=${lines}"
+    fi
+    request GET "${base}/tabs/${id}/read${query}"
+    ;;
+  wait)
+    need_id
+    [[ "$wait_for" == "idle" || "$wait_for" == "exit" ]] || { echo "--for must be idle or exit" >&2; exit 1; }
+    query="?for=${wait_for}"
+    if [[ -n "$timeout_ms" ]]; then
+      is_number "$timeout_ms" || { echo "--timeout-ms must be a number" >&2; exit 1; }
+      query+="&timeout_ms=${timeout_ms}"
+    fi
+    if [[ -n "$quiet_ms" ]]; then
+      is_number "$quiet_ms" || { echo "--quiet-ms must be a number" >&2; exit 1; }
+      query+="&quiet_ms=${quiet_ms}"
+    fi
+    request GET "${base}/tabs/${id}/wait${query}"
+    ;;
+  close)
+    need_id
+    request POST "${base}/tabs/${id}/close" '{}'
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

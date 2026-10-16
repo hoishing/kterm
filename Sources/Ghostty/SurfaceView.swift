@@ -55,9 +55,10 @@ final class SurfaceView: NSView, NSTextInputClient {
     ///   folder passed to `open -a kterm <dir>` or dropped on the app icon). It
     ///   overrides any inherited cwd. `nil` to keep the default / inherited one.
     /// - Parameter command: shell command to run instead of the login shell.
-    ///   libghostty executes it via `/bin/sh -c` and waits after it exits.
+    ///   libghostty executes it via `bash -c "exec -l <command>"` with the
+    ///   app's environment and waits after it exits.
     /// - Parameter initialInput: bytes written to the pty after the command
-    ///   starts. Used to deliver an agent prompt.
+    ///   starts (a command line typed into a fresh shell tab).
     /// - Parameter agent: when set, exported as `KTERM_AGENT`.
     init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil,
          inheritContext: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_TAB,
@@ -99,6 +100,18 @@ final class SurfaceView: NSView, NSTextInputClient {
            let key = cString("KTERM_AGENT"), let value = cString(agent) {
             env.append(ghostty_env_var_s(key: key, value: value))
         }
+        // `ktermctl` (the control CLI): exported as `KTERM_CLI` and appended to
+        // PATH so agents in any pane can drive kterm.
+        if let cli = Self.cliPath {
+            let binDir = (cli as NSString).deletingLastPathComponent
+            let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+            if let key = cString("KTERM_CLI"), let value = cString(cli) {
+                env.append(ghostty_env_var_s(key: key, value: value))
+            }
+            if let key = cString("PATH"), let value = cString(path + ":" + binDir) {
+                env.append(ghostty_env_var_s(key: key, value: value))
+            }
+        }
         if let workingDirectory, !workingDirectory.isEmpty {
             cfg.working_directory = cString(workingDirectory)
         }
@@ -119,6 +132,10 @@ final class SurfaceView: NSView, NSTextInputClient {
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    /// Bundled `Contents/Resources/bin/ktermctl`, or nil if missing.
+    static let cliPath: String? = Bundle.main.url(
+        forResource: "ktermctl", withExtension: nil, subdirectory: "bin")?.path
 
     /// Apply a libghostty surface title. Matches Ghostty's 75ms coalesce so
     /// rapid OSC 2 updates (preexec command → precmd cwd) do not flicker.
@@ -481,8 +498,9 @@ final class SurfaceView: NSView, NSTextInputClient {
         }
     }
 
-    /// Write UTF-8 text straight into the terminal, as if it were typed. Used
-    /// for drops and for `kterm tab send`.
+    /// Write UTF-8 text into the terminal. libghostty treats this as a paste:
+    /// bracketed when the program enabled it, control bytes replaced by
+    /// spaces. Used for drops and for `ktermctl tab send`.
     func sendText(_ string: String) {
         guard let surface, !string.isEmpty else { return }
         let len = string.utf8CString.count
@@ -491,25 +509,34 @@ final class SurfaceView: NSView, NSTextInputClient {
         }
     }
 
-    /// The terminal's screen buffer, including scrollback that libghostty
-    /// exposes through `GHOSTTY_POINT_SCREEN`. Empty when the surface is gone.
-    func readScreenText() -> String {
+    /// Press Return: a raw `\r` written to the pty (Ghostty's `text:` binding
+    /// action), outside any bracketed paste, so TUIs treat it as submit.
+    func sendEnter() {
+        guard let surface else { return }
+        let action = "text:\\r"
+        _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
+    }
+
+    /// True once the pane's child process has exited.
+    var processExited: Bool {
+        guard let surface else { return true }
+        return ghostty_surface_process_exited(surface)
+    }
+
+    /// Terminal text: the visible screen (`viewport`) or the whole buffer
+    /// including scrollback. Empty when the surface is gone.
+    func readText(viewport: Bool = false) -> String {
         guard let surface else { return "" }
+        let tag = viewport ? GHOSTTY_POINT_VIEWPORT : GHOSTTY_POINT_SCREEN
         var text = ghostty_text_s()
         let sel = ghostty_selection_s(
-            top_left: ghostty_point_s(
-                tag: GHOSTTY_POINT_SCREEN,
-                coord: GHOSTTY_POINT_COORD_TOP_LEFT,
-                x: 0, y: 0),
-            bottom_right: ghostty_point_s(
-                tag: GHOSTTY_POINT_SCREEN,
-                coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
-                x: 0, y: 0),
+            top_left: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+            bottom_right: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
             rectangle: false)
         guard ghostty_surface_read_text(surface, sel, &text) else { return "" }
         defer { ghostty_surface_free_text(surface, &text) }
-        guard let ptr = text.text else { return "" }
-        return String(cString: ptr)
+        guard let ptr = text.text, text.text_len > 0 else { return "" }
+        return String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(text.text_len)), as: UTF8.self)
     }
 }
 

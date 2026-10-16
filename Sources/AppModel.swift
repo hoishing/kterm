@@ -264,40 +264,40 @@ final class AppModel {
         group.selectedTabID = tab.id
     }
 
-    /// New horizontal tab running `agent`'s configured command, inheriting the
-    /// current pane's cwd unless `cwd` is set. `prompt` is written to the pty
-    /// after start, followed by Enter, so the agent receives it as a submit.
-    /// Returns the new pane id (`KTERM_TAB_ID`).
-    @discardableResult
-    func newAgentTab(_ agent: KtermAgent, cwd: String? = nil, prompt: String? = nil) -> UUID? {
-        newCommandTab(command: ghostty.ktermConfig.command(for: agent),
-                      agent: agent.rawValue,
-                      title: agent.title,
-                      cwd: cwd,
-                      prompt: prompt)
+    /// File → New Agent Tab: `agent` in a new horizontal tab after the
+    /// current one, inheriting its cwd.
+    func newAgentTab(_ agent: KtermAgent) {
+        spawnTab(agent: agent)
     }
 
-    /// New horizontal tab. `command == nil` starts the login shell. A non-empty
-    /// `prompt` is submitted with Enter via libghostty `initial_input`.
+    /// New horizontal tab for the menu and `ktermctl tab new`. An agent tab
+    /// runs the agent through the login shell with `prompt` as its argument;
+    /// `agent == nil` opens the login shell and types `prompt` into it. The
+    /// tab lands after `caller`'s tab (same group, inheriting its cwd), else
+    /// after the selected tab. `background` leaves selection and focus alone.
+    /// Returns the new pane id (`KTERM_TAB_ID`).
     @discardableResult
-    func newCommandTab(command: String?, agent: String?, title: String?,
-                       cwd: String? = nil, prompt: String? = nil) -> UUID? {
+    func spawnTab(agent: KtermAgent?, cwd: String? = nil, prompt: String? = nil,
+                  after caller: PaneHit? = nil, background: Bool = false) -> UUID? {
         guard ghostty.app != nil else { return nil }
-        guard let group = selectedGroup else { return nil }
-        let input: String? = {
-            guard let prompt, !prompt.isEmpty else { return nil }
-            return prompt.hasSuffix("\r") ? prompt : prompt + "\r"
-        }()
-        let term = makeTerminal(inheritFrom: group.selectedTab?.focusedTerminal,
-                                workingDirectory: cwd,
-                                command: command,
-                                initialInput: input,
-                                agent: agent,
-                                agentTitle: title)
+        guard let group = caller?.group ?? selectedGroup else { return nil }
+        let anchor = caller?.tab ?? group.selectedTab
+        let prompt = prompt?.isEmpty == false ? prompt : nil
+        let config = ghostty.ktermConfig
+        let term = makeTerminal(
+            inheritFrom: caller?.term ?? anchor?.focusedTerminal,
+            workingDirectory: cwd,
+            command: agent.map { config.launchCommand(for: $0, prompt: prompt) },
+            initialInput: agent == nil ? prompt.map { $0.hasSuffix("\r") ? $0 : $0 + "\r" } : nil,
+            agent: agent?.rawValue,
+            agentTitle: agent?.title)
         let tab = TerminalTab(root: term)
-        group.tabs.insert(tab, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
-        group.selectedTabID = tab.id
-        focus(term, in: tab)
+        group.tabs.insert(tab, at: insertionIndex(in: group.tabs, after: anchor?.id))
+        if !background {
+            selectedGroupID = group.id
+            group.selectedTabID = tab.id
+            focus(term, in: tab)
+        }
         return term.id
     }
 
@@ -320,23 +320,29 @@ final class AppModel {
         close(term, in: tab, group: group)
     }
 
-    /// Close an entire horizontal tab (all its panes). Used by the tab-chip ×.
+    /// Close an entire horizontal tab (all its panes). Used by the tab-chip ×
+    /// and `ktermctl tab close`. Selection only moves when the closed tab (or
+    /// its emptied group) was the selected one.
     func close(_ tab: TerminalTab, in group: TabGroup) {
         guard let idx = group.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+        let wasSelectedTab = group.selectedTabID == tab.id
+        let wasSelectedGroup = selectedGroupID == group.id
         group.tabs.remove(at: idx)
 
         if group.tabs.isEmpty {
             let gIdx = groups.firstIndex { $0.id == group.id } ?? 0
             groups.remove(at: gIdx)
             if groups.isEmpty {
-                NSApp.keyWindow?.close()
+                window?.close()
                 return
             }
-            selectedGroupID = groups[min(gIdx, groups.count - 1)].id
-        } else {
+            if wasSelectedGroup {
+                selectedGroupID = groups[min(gIdx, groups.count - 1)].id
+            }
+        } else if wasSelectedTab {
             group.selectedTabID = group.tabs[min(idx, group.tabs.count - 1)].id
         }
-        focusSelected()
+        if wasSelectedGroup && wasSelectedTab { focusSelected() }
     }
 
     func select(group: TabGroup) {
@@ -873,6 +879,7 @@ final class AppModel {
                             title: term.displayTitle,
                             pwd: term.pwd,
                             agent: term.agentName,
+                            exited: term.surfaceView.processExited,
                             focused: key && groupSelected && tabSelected && tab.focusedTerminalID == term.id,
                             group: groupIndex,
                             tab: tabIndex,
@@ -884,29 +891,49 @@ final class AppModel {
         return records
     }
 
-    /// Write `text` into the pane. `enter` appends a carriage return.
+    /// Paste `text` into the pane, then (if `enter`) press Return as a
+    /// separate raw write so bracketed-paste TUIs submit instead of inserting
+    /// a newline.
     @discardableResult
     static func send(to id: UUID, text: String, enter: Bool) -> Bool {
-        guard let term = terminal(id: id) else { return false }
-        var payload = text
-        if enter && !payload.hasSuffix("\r") { payload += "\r" }
-        guard !payload.isEmpty else { return false }
-        term.surfaceView.sendText(payload)
+        guard let view = locatePane(id)?.term.surfaceView, !text.isEmpty || enter else { return false }
+        view.sendText(text)
+        if enter {
+            // Let the program finish handling the paste before the submit.
+            let delay: TimeInterval = text.isEmpty ? 0 : 0.1
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak view] in
+                view?.sendEnter()
+            }
+        }
         return true
     }
 
-    /// Screen text of the pane, or nil if it is gone.
-    static func read(id: UUID) -> String? {
-        guard let term = terminal(id: id) else { return nil }
-        return term.surfaceView.readScreenText()
+    /// Pane text (scrollback included), or nil if it is gone. `lines` keeps
+    /// only the last N non-blank-trailing lines.
+    static func read(id: UUID, lines: Int? = nil) -> String? {
+        guard let view = locatePane(id)?.term.surfaceView else { return nil }
+        let text = view.readText()
+        guard let lines, lines > 0 else { return text }
+        var rows = text.components(separatedBy: "\n")
+        while let last = rows.last, last.trimmingCharacters(in: .whitespaces).isEmpty { rows.removeLast() }
+        return rows.suffix(lines).joined(separator: "\n")
     }
 
-    private static func terminal(id: UUID) -> Terminal? {
+    /// Close one pane (the tab too, if it was the tab's only pane).
+    @discardableResult
+    static func closePane(id: UUID) -> Bool {
+        guard let hit = locatePane(id) else { return false }
+        hit.model.close(hit.term, in: hit.tab, group: hit.group)
+        return true
+    }
+
+    /// The window, group, tab and pane owning pane `id`, across windows.
+    static func locatePane(_ id: UUID) -> PaneHit? {
         for model in all {
             for group in model.groups {
                 for tab in group.tabs {
                     if let term = tab.terminals.first(where: { $0.id == id }) {
-                        return term
+                        return PaneHit(model: model, group: group, tab: tab, term: term)
                     }
                 }
             }
@@ -923,12 +950,21 @@ final class AppModel {
     }
 }
 
-/// One pane, as reported by `kterm tab list`. `id` matches `KTERM_TAB_ID`.
+/// Where a pane lives. See `AppModel.locatePane`.
+struct PaneHit {
+    let model: AppModel
+    let group: TabGroup
+    let tab: TerminalTab
+    let term: Terminal
+}
+
+/// One pane, as reported by `ktermctl tab list`. `id` matches `KTERM_TAB_ID`.
 struct PaneRecord {
     var id: UUID
     var title: String
     var pwd: String
     var agent: String?
+    var exited: Bool
     var focused: Bool
     var group: Int
     var tab: Int

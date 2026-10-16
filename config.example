@@ -14,7 +14,7 @@ kterm-font-ligatures = false
 # App-shell chrome font (sidebar, tabs, pills, …). Default shown; falls back
 # to the system UI font when the family isn't installed. `monospace` = system mono.
 # kterm-ui-font-family = JetBrainsMono Nerd Font Mono
-# Shell command for File → New Agent Tab. Passed to /bin/sh -c.
+# Command for File → New Agent Tab / `ktermctl tab new`. Runs in your login shell.
 # kterm-agent-claude = claude
 # kterm-agent-codex = codex
 # kterm-agent-pi = pi
