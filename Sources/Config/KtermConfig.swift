@@ -1,6 +1,22 @@
 import Foundation
 import GhosttyKit
 
+/// A coding agent kterm can launch in its own horizontal tab.
+enum KtermAgent: String, CaseIterable, Identifiable {
+    case claude, codex, pi, grok
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .claude: "Claude"
+        case .codex: "Codex"
+        case .pi: "Pi"
+        case .grok: "Grok"
+        }
+    }
+}
+
 /// kterm's text configuration, read once at launch from `~/.config/kterm/config`.
 ///
 /// The file uses libghostty's `key = value` syntax. Lines whose key starts with
@@ -34,6 +50,22 @@ struct KtermConfig {
     /// uses the system monospaced face. Does not affect the terminal surface —
     /// that still uses Ghostty's `font-family`.
     var uiFontFamily: String = "JetBrainsMono Nerd Font Mono"
+
+    /// Shell command used to start each agent. `kterm-agent-<name>`. The value
+    /// is passed to libghostty as a shell command (`/bin/sh -c`), same as
+    /// Ghostty's `command`.
+    var agentCommands: [String: String] = [
+        KtermAgent.claude.rawValue: "claude",
+        KtermAgent.codex.rawValue: "codex",
+        KtermAgent.pi.rawValue: "pi",
+        KtermAgent.grok.rawValue: "grok",
+    ]
+
+    func command(for agent: KtermAgent) -> String {
+        let command = agentCommands[agent.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let command, !command.isEmpty { return command }
+        return agent.rawValue
+    }
 
     /// Lines to pass through to libghostty verbatim.
     private var ghosttyLines: [String] = []
@@ -119,6 +151,10 @@ struct KtermConfig {
         case "kterm-ui-font-family":
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { uiFontFamily = trimmed }
+        case "kterm-agent-claude", "kterm-agent-codex", "kterm-agent-pi", "kterm-agent-grok":
+            let name = String(key.dropFirst("kterm-agent-".count))
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { agentCommands[name] = trimmed }
         default:
             break // unknown kterm- key: ignore
         }

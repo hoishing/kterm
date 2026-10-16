@@ -17,6 +17,8 @@ final class Terminal: Identifiable {
     /// repo or in detached HEAD.
     var git: GitBranch.Info?
     let surfaceView: SurfaceView
+    /// Set when this pane was opened as a coding agent (`claude`, `codex`, …).
+    let agentName: String?
 
     /// Has an unread notification/bell that the user hasn't acknowledged yet.
     /// Set whenever a bell or OSC 9/777 notification arrives for this tab —
@@ -42,17 +44,32 @@ final class Terminal: Identifiable {
     ///   (`TAB` for a new tab, `SPLIT` for a new pane).
     /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
     ///   folder passed to `open -a kterm <dir>`), overriding the inherited cwd.
+    /// - Parameter command: shell command to run instead of the login shell.
+    /// - Parameter initialInput: bytes delivered after the command starts.
+    /// - Parameter agent: agent id exported as `KTERM_AGENT` and shown until
+    ///   the shell sets a title. `agentTitle` is that initial chip label.
     init(app: GhosttyApp,
          inheritFrom parent: Terminal? = nil,
          inheritContext: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_TAB,
-         workingDirectory: String? = nil) {
+         workingDirectory: String? = nil,
+         command: String? = nil,
+         initialInput: String? = nil,
+         agent: String? = nil,
+         agentTitle: String? = nil) {
         // `app.app` is guaranteed non-nil once the app launched successfully.
         // `id` (a stored `let` with a default) is already initialized here, so
         // the surface can be tagged with this tab's id via `KTERM_TAB_ID`.
+        self.agentName = agent
         self.surfaceView = SurfaceView(
             app: app.app!, tabID: id, inheritFrom: parent?.surfaceView.surface,
             inheritContext: inheritContext,
-            workingDirectory: workingDirectory)
+            workingDirectory: workingDirectory,
+            command: command,
+            initialInput: initialInput,
+            agent: agent)
+        if let agentTitle, !agentTitle.isEmpty {
+            title = agentTitle
+        }
     }
 
     /// Tab/sidebar label, same source as Ghostty's tab bar: the surface
@@ -245,6 +262,43 @@ final class AppModel {
         let tab = TerminalTab(root: term)
         group.tabs.insert(tab, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
         group.selectedTabID = tab.id
+    }
+
+    /// New horizontal tab running `agent`'s configured command, inheriting the
+    /// current pane's cwd unless `cwd` is set. `prompt` is written to the pty
+    /// after start, followed by Enter, so the agent receives it as a submit.
+    /// Returns the new pane id (`KTERM_TAB_ID`).
+    @discardableResult
+    func newAgentTab(_ agent: KtermAgent, cwd: String? = nil, prompt: String? = nil) -> UUID? {
+        newCommandTab(command: ghostty.ktermConfig.command(for: agent),
+                      agent: agent.rawValue,
+                      title: agent.title,
+                      cwd: cwd,
+                      prompt: prompt)
+    }
+
+    /// New horizontal tab. `command == nil` starts the login shell. A non-empty
+    /// `prompt` is submitted with Enter via libghostty `initial_input`.
+    @discardableResult
+    func newCommandTab(command: String?, agent: String?, title: String?,
+                       cwd: String? = nil, prompt: String? = nil) -> UUID? {
+        guard ghostty.app != nil else { return nil }
+        guard let group = selectedGroup else { return nil }
+        let input: String? = {
+            guard let prompt, !prompt.isEmpty else { return nil }
+            return prompt.hasSuffix("\r") ? prompt : prompt + "\r"
+        }()
+        let term = makeTerminal(inheritFrom: group.selectedTab?.focusedTerminal,
+                                workingDirectory: cwd,
+                                command: command,
+                                initialInput: input,
+                                agent: agent,
+                                agentTitle: title)
+        let tab = TerminalTab(root: term)
+        group.tabs.insert(tab, at: insertionIndex(in: group.tabs, after: group.selectedTabID))
+        group.selectedTabID = tab.id
+        focus(term, in: tab)
+        return term.id
     }
 
     /// The slot a freshly spawned sibling should occupy. With
@@ -689,9 +743,17 @@ final class AppModel {
 
     private func makeTerminal(inheritFrom parent: Terminal? = nil,
                               inheritContext: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_TAB,
-                              workingDirectory: String? = nil) -> Terminal {
+                              workingDirectory: String? = nil,
+                              command: String? = nil,
+                              initialInput: String? = nil,
+                              agent: String? = nil,
+                              agentTitle: String? = nil) -> Terminal {
         let term = Terminal(app: ghostty, inheritFrom: parent, inheritContext: inheritContext,
-                            workingDirectory: workingDirectory)
+                            workingDirectory: workingDirectory,
+                            command: command,
+                            initialInput: initialInput,
+                            agent: agent,
+                            agentTitle: agentTitle)
         term.surfaceView.onTitleChange = { [weak term] title in
             term?.title = title
         }
@@ -790,6 +852,68 @@ final class AppModel {
         }
     }
 
+    /// The window the control socket should act on: the key window, else the
+    /// oldest one still open.
+    static func front() -> AppModel? {
+        all.first { $0.window?.isKeyWindow == true } ?? all.first
+    }
+
+    /// Every live pane, across windows. `id` is `KTERM_TAB_ID`.
+    static func listPanes() -> [PaneRecord] {
+        var records: [PaneRecord] = []
+        for model in all {
+            let key = model.window?.isKeyWindow == true
+            for (groupIndex, group) in model.groups.enumerated() {
+                let groupSelected = model.selectedGroupID == group.id
+                for (tabIndex, tab) in group.tabs.enumerated() {
+                    let tabSelected = group.selectedTabID == tab.id
+                    for (paneIndex, term) in tab.terminals.enumerated() {
+                        records.append(PaneRecord(
+                            id: term.id,
+                            title: term.displayTitle,
+                            pwd: term.pwd,
+                            agent: term.agentName,
+                            focused: key && groupSelected && tabSelected && tab.focusedTerminalID == term.id,
+                            group: groupIndex,
+                            tab: tabIndex,
+                            pane: paneIndex))
+                    }
+                }
+            }
+        }
+        return records
+    }
+
+    /// Write `text` into the pane. `enter` appends a carriage return.
+    @discardableResult
+    static func send(to id: UUID, text: String, enter: Bool) -> Bool {
+        guard let term = terminal(id: id) else { return false }
+        var payload = text
+        if enter && !payload.hasSuffix("\r") { payload += "\r" }
+        guard !payload.isEmpty else { return false }
+        term.surfaceView.sendText(payload)
+        return true
+    }
+
+    /// Screen text of the pane, or nil if it is gone.
+    static func read(id: UUID) -> String? {
+        guard let term = terminal(id: id) else { return nil }
+        return term.surfaceView.readScreenText()
+    }
+
+    private static func terminal(id: UUID) -> Terminal? {
+        for model in all {
+            for group in model.groups {
+                for tab in group.tabs {
+                    if let term = tab.terminals.first(where: { $0.id == id }) {
+                        return term
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
     /// Make the selected terminal's view first responder so typing goes to it.
     private func focusSelected() {
         guard let view = selectedGroup?.selectedTab?.focusedTerminal?.surfaceView else { return }
@@ -797,6 +921,18 @@ final class AppModel {
             view.window?.makeFirstResponder(view)
         }
     }
+}
+
+/// One pane, as reported by `kterm tab list`. `id` matches `KTERM_TAB_ID`.
+struct PaneRecord {
+    var id: UUID
+    var title: String
+    var pwd: String
+    var agent: String?
+    var focused: Bool
+    var group: Int
+    var tab: Int
+    var pane: Int
 }
 
 extension TerminalTab {

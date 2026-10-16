@@ -92,6 +92,31 @@ click-to-focus notifications), so a script can jump you back to its own pane:
 open "kterm://focus-tab?id=$KTERM_TAB_ID"
 ```
 
+## Agents
+
+File → New Agent Tab starts Claude, Codex, Pi, or Grok in a new horizontal tab,
+inheriting the current directory. Override the shell command with
+`kterm-agent-claude` (and `-codex`, `-pi`, `-grok`) in `~/.config/kterm/config`.
+
+`scripts/kterm` talks to the running app (list, new, focus, send, read). Pane
+ids are `KTERM_TAB_ID`.
+
+```sh
+scripts/kterm tab new --agent claude --prompt "look at the login form"
+scripts/kterm tab list
+scripts/kterm tab send --id "$KTERM_TAB_ID" --text "continue" --enter
+```
+
+## Point at a Chrome element
+
+In Chrome's front tab, press **Ctrl+Shift+K**, then click an element. kterm
+copies a text reference (URL, selector, accessible name, source when the page
+exposes it) to the clipboard. It does not type into the agent. Paste it
+yourself.
+
+Chrome must allow this once: View → Developer → Allow JavaScript from Apple
+Events. The shortcut is installed in the page, so it does not fire in other apps.
+
 ## Build
 
 Requires Xcode (with the Metal Toolchain component) and

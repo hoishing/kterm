@@ -14,6 +14,11 @@ kterm-font-ligatures = false
 # App-shell chrome font (sidebar, tabs, pills, …). Default shown; falls back
 # to the system UI font when the family isn't installed. `monospace` = system mono.
 # kterm-ui-font-family = JetBrainsMono Nerd Font Mono
+# Shell command for File → New Agent Tab. Passed to /bin/sh -c.
+# kterm-agent-claude = claude
+# kterm-agent-codex = codex
+# kterm-agent-pi = pi
+# kterm-agent-grok = grok
 
 # --- terminal (libghostty) ---
 # kterm built-in defaults (override by setting the same key here):

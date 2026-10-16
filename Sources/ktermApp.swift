@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         UNUserNotificationCenter.current().delegate = self
         NotificationManager.requestAuthorizationIfNeeded()
+        ControlServer.shared.start()
+        ChromeGrab.shared.start()
     }
 
     // Bell / OSC 9 / OSC 777 notifications are only posted when kterm isn't
@@ -176,6 +178,11 @@ private struct KtermCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
             Button("New Horizontal Tab") { model?.newHorizontalTab() }
                 .keyboardShortcut("t", modifiers: .command)
+            Menu("New Agent Tab") {
+                ForEach(KtermAgent.allCases) { agent in
+                    Button(agent.title) { model?.newAgentTab(agent) }
+                }
+            }
         }
 
         // Ghostty's Reload Configuration (⌘⇧,). libghostty's built-in keybind

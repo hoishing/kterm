@@ -54,9 +54,17 @@ final class SurfaceView: NSView, NSTextInputClient {
     /// - Parameter workingDirectory: an explicit directory to open in (e.g. a
     ///   folder passed to `open -a kterm <dir>` or dropped on the app icon). It
     ///   overrides any inherited cwd. `nil` to keep the default / inherited one.
+    /// - Parameter command: shell command to run instead of the login shell.
+    ///   libghostty executes it via `/bin/sh -c` and waits after it exits.
+    /// - Parameter initialInput: bytes written to the pty after the command
+    ///   starts. Used to deliver an agent prompt.
+    /// - Parameter agent: when set, exported as `KTERM_AGENT`.
     init(app: ghostty_app_t, tabID: UUID, inheritFrom parent: ghostty_surface_t? = nil,
          inheritContext: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_TAB,
-         workingDirectory: String? = nil) {
+         workingDirectory: String? = nil,
+         command: String? = nil,
+         initialInput: String? = nil,
+         agent: String? = nil) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
         var cfg = parent.map {
@@ -71,26 +79,39 @@ final class SurfaceView: NSView, NSTextInputClient {
         // `ghostty_surface_inherited_config` calls pick the right context.
         cfg.context = inheritContext
 
-        // Expose this tab's id to its shell as `KTERM_TAB_ID`, so a program in
-        // the tab can address it — e.g. `open "kterm://focus-tab?id=$KTERM_TAB_ID"`
-        // raises this exact tab. It's also how a desktop notification routes a
-        // tap back to the tab that raised it (see AppDelegate / NotificationManager).
-        self.surface = "KTERM_TAB_ID".withCString { keyPtr in
-            tabID.uuidString.withCString { valPtr in
-                var env = ghostty_env_var_s(key: keyPtr, value: valPtr)
-                return withUnsafeMutablePointer(to: &env) { envPtr in
-                    cfg.env_vars = envPtr
-                    cfg.env_var_count = 1
-                    // If an explicit working directory was requested, point the
-                    // surface at it (overriding any inherited cwd). The C string
-                    // must outlive `ghostty_surface_new`.
-                    guard let workingDirectory else { return ghostty_surface_new(app, &cfg) }
-                    return workingDirectory.withCString { dirPtr in
-                        cfg.working_directory = dirPtr
-                        return ghostty_surface_new(app, &cfg)
-                    }
-                }
-            }
+        // C strings must stay alive through `ghostty_surface_new`; libghostty
+        // copies them during that call.
+        var cStrings: [UnsafeMutablePointer<CChar>] = []
+        defer { cStrings.forEach { free($0) } }
+        func cString(_ value: String) -> UnsafePointer<CChar>? {
+            guard let ptr = strdup(value) else { return nil }
+            cStrings.append(ptr)
+            return UnsafePointer(ptr)
+        }
+
+        // Expose this pane's id as `KTERM_TAB_ID`, so a program in the tab can
+        // address it — e.g. `open "kterm://focus-tab?id=$KTERM_TAB_ID"`.
+        var env: [ghostty_env_var_s] = []
+        if let key = cString("KTERM_TAB_ID"), let value = cString(tabID.uuidString) {
+            env.append(ghostty_env_var_s(key: key, value: value))
+        }
+        if let agent, !agent.isEmpty,
+           let key = cString("KTERM_AGENT"), let value = cString(agent) {
+            env.append(ghostty_env_var_s(key: key, value: value))
+        }
+        if let workingDirectory, !workingDirectory.isEmpty {
+            cfg.working_directory = cString(workingDirectory)
+        }
+        if let command, !command.isEmpty {
+            cfg.command = cString(command)
+        }
+        if let initialInput, !initialInput.isEmpty {
+            cfg.initial_input = cString(initialInput)
+        }
+        env.withUnsafeMutableBufferPointer { buf in
+            cfg.env_vars = buf.baseAddress
+            cfg.env_var_count = buf.count
+            self.surface = ghostty_surface_new(app, &cfg)
         }
 
         postsFrameChangedNotifications = true
@@ -461,13 +482,34 @@ final class SurfaceView: NSView, NSTextInputClient {
     }
 
     /// Write UTF-8 text straight into the terminal, as if it were typed. Used
-    /// for drops, where there is no key event to accumulate through.
-    fileprivate func sendText(_ string: String) {
+    /// for drops and for `kterm tab send`.
+    func sendText(_ string: String) {
         guard let surface, !string.isEmpty else { return }
         let len = string.utf8CString.count
         if len > 1 {
             string.withCString { ghostty_surface_text(surface, $0, UInt(len - 1)) }
         }
+    }
+
+    /// The terminal's screen buffer, including scrollback that libghostty
+    /// exposes through `GHOSTTY_POINT_SCREEN`. Empty when the surface is gone.
+    func readScreenText() -> String {
+        guard let surface else { return "" }
+        var text = ghostty_text_s()
+        let sel = ghostty_selection_s(
+            top_left: ghostty_point_s(
+                tag: GHOSTTY_POINT_SCREEN,
+                coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+                x: 0, y: 0),
+            bottom_right: ghostty_point_s(
+                tag: GHOSTTY_POINT_SCREEN,
+                coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+                x: 0, y: 0),
+            rectangle: false)
+        guard ghostty_surface_read_text(surface, sel, &text) else { return "" }
+        defer { ghostty_surface_free_text(surface, &text) }
+        guard let ptr = text.text else { return "" }
+        return String(cString: ptr)
     }
 }
 
