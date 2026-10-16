@@ -118,12 +118,6 @@ struct KtermConfig {
     private static let disableLigaturesLine = "font-feature = -calt, -liga, -dlig"
 
     static var path: URL {
-        #if DEBUG
-        // Let UI tests inject a throwaway config file (see `FontLigatureTests`).
-        if let override = ProcessInfo.processInfo.environment["KTERM_UITEST_CONFIG"] {
-            return URL(fileURLWithPath: override)
-        }
-        #endif
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/kterm/config")
     }

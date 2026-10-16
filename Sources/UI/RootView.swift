@@ -97,11 +97,6 @@ struct RootView: View {
         .frame(minWidth: 640, minHeight: 400)
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator(model: model))
-        .overlay(alignment: .bottomTrailing) { uiTestDragSource }
-        .overlay(alignment: .topTrailing) { uiTestLigatureProbe }
-        .overlay(alignment: .topLeading) {
-            DockBounceProbe(count: model.dockAttentionRequests).frame(width: 1, height: 1)
-        }
         .onAppear { syncSidebarWidth(force: true) }
         .onChange(of: model.ghostty.ktermConfig.sidebarWidth) { syncSidebarWidth() }
     }
@@ -114,47 +109,6 @@ struct RootView: View {
         guard force || w != lastConfigWidth else { return }
         lastConfigWidth = w
         sidebarWidth = min(max(w, minSidebar), maxSidebar)
-    }
-
-    /// A UI-test-only probe exposing the effective `kterm-font-ligatures` value,
-    /// present only when launched with `KTERM_UITEST_CONFIG`. libghostty renders
-    /// the terminal as one opaque surface, so the toggle's effect on glyphs isn't
-    /// reachable through the accessibility tree; this surfaces the parsed setting
-    /// instead (see `FontLigatureTests`). Compiled out of release builds.
-    @ViewBuilder private var uiTestLigatureProbe: some View {
-        #if DEBUG
-        if ProcessInfo.processInfo.environment["KTERM_UITEST_CONFIG"] != nil {
-            // The state is encoded in the identifier (`.on`/`.off`) rather than
-            // an accessibility value: XCUITest doesn't surface `.value` for a
-            // plain non-control probe element, but it does surface identifiers.
-            let cfg = model.ghostty.ktermConfig
-            let liga = cfg.fontLigatures ? "on" : "off"
-            // Encode the family in the identifier so UI tests can assert the
-            // parsed `kterm-ui-font-family` without reaching into Swift state.
-            let family = cfg.uiFontFamily.isEmpty ? "monospace" : cfg.uiFontFamily
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityElement()
-                .accessibilityIdentifier("config.fontLigatures.\(liga)")
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityElement()
-                .accessibilityIdentifier("config.uiFontFamily.\(family)")
-        }
-        #endif
-    }
-
-    /// A UI-test-only drag source overlaid on the terminal corner, present only
-    /// when launched with `KTERM_UITEST_DRAG_PATH` (see `DragImageDropTests`).
-    /// Empty — and compiled out entirely — otherwise.
-    @ViewBuilder private var uiTestDragSource: some View {
-        #if DEBUG
-        if let path = ProcessInfo.processInfo.environment["KTERM_UITEST_DRAG_PATH"] {
-            UITestDragSource(fileURL: URL(fileURLWithPath: path))
-                .frame(width: 44, height: 44)
-                .padding(8)
-        }
-        #endif
     }
 
     /// A thin, full-height strip just right of the divider that resizes the
@@ -397,31 +351,6 @@ final class SurfaceHostView: NSView {
         let size = bounds.size
         guard size.width > 0, size.height > 0 else { return }
         apply(size: size, to: surface)
-    }
-}
-
-/// A tiny, click-transparent AppKit accessibility element whose value is the
-/// running count of dock-icon attention requests (`AppModel.dockAttentionRequests`).
-/// The dock bounce itself isn't observable from XCUITest, so this lets a UI test
-/// confirm a background ping bounced the dock. `hitTest` returns nil so it never
-/// steals mouse events; only its accessibility value is ever read.
-struct DockBounceProbe: NSViewRepresentable {
-    let count: Int
-
-    final class ProbeView: NSView {
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = ProbeView()
-        view.setAccessibilityElement(true)
-        view.setAccessibilityIdentifier("app.dockBounces")
-        view.setAccessibilityValue(String(count))
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        nsView.setAccessibilityValue(String(count))
     }
 }
 
