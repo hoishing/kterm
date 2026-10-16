@@ -15,16 +15,49 @@ Usage:
   ktermctl tab read  --id UUID [--lines N]
   ktermctl tab wait  --id UUID [--for idle|exit] [--timeout-ms MS] [--quiet-ms MS]
   ktermctl tab close --id UUID
+  ktermctl help
 
-tab new opens next to --from (default: $KTERM_TAB_ID) and prints {"id": ...}.
---prompt is the agent's initial prompt (for shell: a command line to run).
---background keeps the current tab selected.
-tab send pastes TEXT; --enter then presses Return separately.
-tab wait --for idle returns once the screen is unchanged for --quiet-ms
-(default 3000); exit status 2 on timeout (default 300000 ms).
+Commands (all print JSON):
+  list   All panes: id, title, pwd, agent, exited, focused, group/tab/pane.
+  new    Opens next to --from (default: $KTERM_TAB_ID, inheriting its cwd)
+         and prints {"id": ...}. --prompt is the agent's initial prompt (for
+         shell: a command line to run). --background keeps the current tab
+         selected.
+  send   Pastes TEXT; --enter then presses Return separately.
+  read   {"text": ...} of the screen; --lines N keeps only the last N lines.
+  wait   {"state": idle|exited|closed}. --for idle returns once the screen is
+         unchanged for --quiet-ms (default 3000); --for exit waits for the
+         process to end. {"state":"timeout"} after --timeout-ms (default
+         300000, max 3600000).
+
+Exit status: 0 ok, 1 error, 2 wait timed out.
+
+Delegating to another agent:
+  id=$(ktermctl tab new --agent codex --background --prompt "TASK" | jq -r .id)
+  ktermctl tab wait --id "$id"             # screen went quiet
+  ktermctl tab read --id "$id" --lines 40  # check what it actually did
+  ktermctl tab send --id "$id" --text "FOLLOW-UP" --enter   # if needed
+  ktermctl tab close --id "$id"            # when done
+
+Rules:
+  - idle only means the screen stopped changing. The agent may be finished,
+    asking a question, or waiting on a permission prompt: always read after
+    wait and decide from the text.
+  - Agent TUIs stay open after a task, so --for exit never returns for them;
+    use it only for shell tabs whose --prompt command ends.
+  - On exit status 2, read the tab: output still moving means busy; the same
+    prompt means stuck. Wait again or send input.
+  - Read with --lines to keep output small; the full screen is rarely needed.
+  - Close only tabs you opened; never close your own $KTERM_TAB_ID.
 EOF
 }
 
+case "${1:-}" in
+  help|-h|--help) usage; exit 0 ;;
+esac
+case "${2:-}" in
+  help|-h|--help) usage; exit 0 ;;
+esac
 if [[ $# -lt 2 || "$1" != "tab" ]]; then
   usage >&2
   exit 1
