@@ -20,6 +20,15 @@ final class Terminal: Identifiable {
     /// Set when this pane was opened as a coding agent (`claude`, `codex`, …).
     let agentName: String?
 
+    /// Directory the pane was started in (explicit, or inherited from the
+    /// spawning pane). Agents don't report `pwd` via OSC 7, so this is what
+    /// session restore falls back to (see `currentDirectory`).
+    let launchDirectory: String?
+
+    /// Best-known working directory: the shell-reported `pwd`, else
+    /// `launchDirectory`.
+    var currentDirectory: String? { pwd.isEmpty ? launchDirectory : pwd }
+
     /// Has an unread notification/bell that the user hasn't acknowledged yet.
     /// Set whenever a bell or OSC 9/777 notification arrives for this tab —
     /// even while it's frontmost-visible, mirroring cmux; drives the sidebar
@@ -60,6 +69,7 @@ final class Terminal: Identifiable {
         // `id` (a stored `let` with a default) is already initialized here, so
         // the surface can be tagged with this tab's id via `KTERM_TAB_ID`.
         self.agentName = agent
+        self.launchDirectory = workingDirectory ?? parent?.currentDirectory
         self.surfaceView = SurfaceView(
             app: app.app!, tabID: id, inheritFrom: parent?.surfaceView.surface,
             inheritContext: inheritContext,
@@ -180,7 +190,20 @@ final class AppModel {
 
     /// This model's NSWindow, captured once it's on screen (see
     /// `WindowConfigurator`). Used to raise the window.
-    weak var window: NSWindow?
+    weak var window: NSWindow? {
+        didSet {
+            guard window !== oldValue, let window else { return }
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { [weak self] in self?.windowClosed = true }
+            }
+        }
+    }
+
+    /// The user closed this window. Its model can outlive the window, so
+    /// session saving skips it (closing the last window means a fresh start).
+    private var windowClosed = false
 
     /// Every live window's model, oldest first. Weakly held so a closed
     /// window's model drops out on its own. Lets a notification tap reach
@@ -202,6 +225,10 @@ final class AppModel {
     /// launch still get its first window (see `openDirectory`).
     static var openNewWindow: (() -> Void)?
 
+    /// Saved windows still waiting to be restored at launch (see
+    /// `SessionStore`). Each new window's model consumes the first one.
+    static var pendingWindows: [WindowSnap] = []
+
     var selectedGroup: TabGroup? {
         groups.first { $0.id == selectedGroupID } ?? groups.first
     }
@@ -210,12 +237,24 @@ final class AppModel {
         self.ghostty = ghostty
         Self.registry.removeAll { $0.model == nil }
         Self.registry.append(Box(self))
-        // Start with one vertical tab containing one terminal. On a cold launch
-        // via `open -a kterm <dir>` the requested folder may already be waiting;
-        // consume it so the very first tab opens there.
+        // Restore the next saved window, if any; otherwise start with one
+        // vertical tab containing one terminal. On a cold launch via
+        // `open -a kterm <dir>` the requested folder may already be waiting;
+        // consume it so it opens as a tab (the very first one when nothing
+        // was restored).
         let pending = Self.pendingOpenDirectory
         Self.pendingOpenDirectory = nil
-        newVerticalTab(workingDirectory: pending)
+        if !Self.pendingWindows.isEmpty {
+            restore(Self.pendingWindows.removeFirst())
+            // Each further saved window gets its own window, which pops the
+            // next snapshot here.
+            if !Self.pendingWindows.isEmpty {
+                DispatchQueue.main.async { Self.openNewWindow?() }
+            }
+        }
+        if groups.isEmpty || pending != nil {
+            newVerticalTab(workingDirectory: pending)
+        }
 
         // Re-check the selected tab's branch when kterm regains focus, so an
         // in-shell `git checkout` made while another app was frontmost shows
@@ -933,6 +972,88 @@ final class AppModel {
             }
         }
         return nil
+    }
+
+    // MARK: - Session persistence
+
+    /// Every window's layout, oldest window first, for `SessionStore`.
+    static func sessionSnapshot() -> Session {
+        Session(windows: all.filter { !$0.windowClosed }.map { $0.snapshot() }
+            .filter { !$0.groups.isEmpty })
+    }
+
+    func snapshot() -> WindowSnap {
+        WindowSnap(
+            groups: groups.map { group in
+                GroupSnap(
+                    tabs: group.tabs.compactMap { tab in
+                        guard let root = tab.tree.root else { return nil }
+                        let focused = tab.terminals.firstIndex { $0.id == tab.focusedTerminalID } ?? 0
+                        return TabSnap(root: Self.snapshot(root), focusedPane: focused)
+                    },
+                    selectedTab: group.tabs.firstIndex { $0.id == group.selectedTabID } ?? 0)
+            },
+            selectedGroup: groups.firstIndex { $0.id == selectedGroupID } ?? 0,
+            sidebarVisible: sidebarVisible)
+    }
+
+    private static func snapshot(_ node: SplitTree.Node) -> NodeSnap {
+        switch node {
+        case .leaf(let term):
+            return .leaf(pwd: term.currentDirectory ?? "", agent: term.agentName)
+        case .split(let split):
+            return .split(horizontal: split.direction == .horizontal, ratio: split.ratio,
+                          left: snapshot(split.left), right: snapshot(split.right))
+        }
+    }
+
+    /// Rebuild a saved window: groups, tabs and split trees in their saved
+    /// order. Agent panes relaunch their agent with its continue flag.
+    private func restore(_ snap: WindowSnap) {
+        guard ghostty.app != nil else { return }
+        for groupSnap in snap.groups {
+            let group = TabGroup()
+            for tabSnap in groupSnap.tabs {
+                let root = restore(tabSnap.root)
+                let tab = TerminalTab(root: root.leftmostLeaf())
+                tab.tree = SplitTree(root: root)
+                let terms = tab.terminals
+                if terms.indices.contains(tabSnap.focusedPane) {
+                    tab.focusedTerminalID = terms[tabSnap.focusedPane].id
+                }
+                group.tabs.append(tab)
+            }
+            guard !group.tabs.isEmpty else { continue }
+            group.selectedTabID = group.tabs[min(max(groupSnap.selectedTab, 0), group.tabs.count - 1)].id
+            groups.append(group)
+        }
+        if !groups.isEmpty {
+            selectedGroupID = groups[min(max(snap.selectedGroup, 0), groups.count - 1)].id
+        }
+        sidebarVisible = snap.sidebarVisible
+    }
+
+    private func restore(_ node: NodeSnap) -> SplitTree.Node {
+        switch node {
+        case .leaf(let pwd, let agentName):
+            var isDir: ObjCBool = false
+            let cwd = !pwd.isEmpty && FileManager.default.fileExists(atPath: pwd, isDirectory: &isDir)
+                && isDir.boolValue ? pwd : nil
+            let agent = agentName.flatMap(KtermAgent.init(rawValue:))
+            let term = makeTerminal(
+                workingDirectory: cwd,
+                command: agent.map { ghostty.ktermConfig.launchCommand(for: $0, prompt: nil, resume: true) },
+                agent: agent?.rawValue,
+                agentTitle: agent?.title)
+            // Seed `pwd` so a shell tab shows its folder before its first
+            // OSC 7 report.
+            if let cwd, agent == nil { term.pwd = cwd }
+            return .leaf(term)
+        case .split(let horizontal, let ratio, let left, let right):
+            return .split(.init(direction: horizontal ? .horizontal : .vertical,
+                                ratio: min(max(ratio, 0.1), 0.9),
+                                left: restore(left), right: restore(right)))
+        }
     }
 
     /// Make the selected terminal's view first responder so typing goes to it.

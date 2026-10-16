@@ -19,6 +19,10 @@ kterm-font-ligatures = false
 # kterm-agent-codex = codex
 # kterm-agent-pi = pi
 # kterm-agent-grok = grok
+# kterm-agent-agy = agy
+# Save every window's tabs (cwd, order, splits) on quit and reopen them on the
+# next launch. Agent tabs relaunch with their continue flag (e.g. claude --continue).
+kterm-restore-tabs = true
 
 # --- terminal (libghostty) ---
 # kterm built-in defaults (override by setting the same key here):

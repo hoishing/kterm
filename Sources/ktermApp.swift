@@ -7,6 +7,22 @@ import GhosttyKit
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // kterm restores its own windows (`SessionStore`); keep macOS window
+        // restoration from reopening extra, empty ones on top.
+        UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false])
+    }
+
+    /// Save every window's tabs for the next launch. On ⌘Q the windows are
+    /// still open; quitting by closing the last window saves an empty session,
+    /// so the next launch starts fresh.
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            guard SessionStore.ghostty?.ktermConfig.restoreTabs == true else { return }
+            SessionStore.save(AppModel.sessionSnapshot())
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Force dark mode regardless of the system appearance.
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -95,8 +111,13 @@ struct KtermApp: App {
     private let ghostty: GhosttyApp
 
     init() {
-        let ghostty = GhosttyApp(config: KtermConfig.load())
+        let config = KtermConfig.load()
+        let ghostty = GhosttyApp(config: config)
         self.ghostty = ghostty
+        SessionStore.ghostty = ghostty
+        if config.restoreTabs {
+            AppModel.pendingWindows = SessionStore.load()?.windows ?? []
+        }
     }
 
     var body: some Scene {

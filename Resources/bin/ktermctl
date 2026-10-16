@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ktermctl tab list
-  ktermctl tab new --agent claude|codex|pi|grok|shell [--cwd DIR] [--prompt TEXT]
+  ktermctl tab new --agent claude|codex|pi|grok|agy|shell [--cwd DIR] [--prompt TEXT]
                    [--from UUID] [--background]
   ktermctl tab focus --id UUID
   ktermctl tab send  --id UUID [--text TEXT] [--enter]

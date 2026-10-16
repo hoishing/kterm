@@ -3,7 +3,7 @@ import GhosttyKit
 
 /// A coding agent kterm can launch in its own horizontal tab.
 enum KtermAgent: String, CaseIterable, Identifiable {
-    case claude, codex, pi, grok
+    case claude, codex, pi, grok, agy
 
     var id: String { rawValue }
 
@@ -13,6 +13,16 @@ enum KtermAgent: String, CaseIterable, Identifiable {
         case .codex: "Codex"
         case .pi: "Pi"
         case .grok: "Grok"
+        case .agy: "Antigravity"
+        }
+    }
+
+    /// Arguments that make the agent continue its most recent session, used
+    /// when a restored tab relaunches it (see `KtermConfig.launchCommand`).
+    var continueArgs: String {
+        switch self {
+        case .codex: "resume --last"
+        case .claude, .pi, .grok, .agy: "--continue"
         }
     }
 }
@@ -51,6 +61,10 @@ struct KtermConfig {
     /// that still uses Ghostty's `font-family`.
     var uiFontFamily: String = "JetBrainsMono Nerd Font Mono"
 
+    /// Save every window's tabs (cwd, order, splits, agents) on quit and
+    /// restore them on the next launch. `kterm-restore-tabs`, on by default.
+    var restoreTabs: Bool = true
+
     /// Shell command used to start each agent. `kterm-agent-<name>`. It runs
     /// inside the user's login + interactive shell (see `launchCommand`), so
     /// PATH, aliases and functions from the shell's rc files apply.
@@ -59,6 +73,7 @@ struct KtermConfig {
         KtermAgent.codex.rawValue: "codex",
         KtermAgent.pi.rawValue: "pi",
         KtermAgent.grok.rawValue: "grok",
+        KtermAgent.agy.rawValue: "agy",
     ]
 
     func command(for agent: KtermAgent) -> String {
@@ -71,9 +86,14 @@ struct KtermConfig {
     /// <prompt>'`. libghostty itself runs commands with the app's bare
     /// environment (launchd PATH), where `claude`, `codex`, … are not found.
     /// Each agent CLI takes the initial prompt as its positional argument.
-    func launchCommand(for agent: KtermAgent, prompt: String?) -> String {
+    /// `resume` appends the agent's `continueArgs` instead of a prompt.
+    func launchCommand(for agent: KtermAgent, prompt: String?, resume: Bool = false) -> String {
         var inner = "exec " + command(for: agent)
-        if let prompt, !prompt.isEmpty { inner += " " + Self.shellQuote(prompt) }
+        if resume {
+            inner += " " + agent.continueArgs
+        } else if let prompt, !prompt.isEmpty {
+            inner += " " + Self.shellQuote(prompt)
+        }
         return Self.shellQuote(Self.loginShell) + " -lic " + Self.shellQuote(inner)
     }
 
@@ -169,7 +189,10 @@ struct KtermConfig {
         case "kterm-ui-font-family":
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { uiFontFamily = trimmed }
-        case "kterm-agent-claude", "kterm-agent-codex", "kterm-agent-pi", "kterm-agent-grok":
+        case "kterm-restore-tabs":
+            if let b = Self.parseBool(value) { restoreTabs = b }
+        case "kterm-agent-claude", "kterm-agent-codex", "kterm-agent-pi", "kterm-agent-grok",
+             "kterm-agent-agy":
             let name = String(key.dropFirst("kterm-agent-".count))
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { agentCommands[name] = trimmed }
